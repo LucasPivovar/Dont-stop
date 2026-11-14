@@ -1,0 +1,9 @@
+{
+  "name": "dont-stop-academia",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Site da Academia Don't Stop em Araucária, PR",
+  "scripts": {
+    "start": "node preview.cjs"
+  }
+}
