@@ -1,33 +1,90 @@
-# Academia Don't Stop
+# Academia Don't Stop — site e gestão
 
-Site estático da Academia Don't Stop, em Araucária, PR. HTML, CSS e JavaScript, com GSAP, ScrollTrigger e MotionPathPlugin distribuídos localmente.
+Site institucional e sistema de gestão da Academia Don't Stop, em Araucária, PR. O painel segue a identidade visual da academia e utiliza um banco SQLite persistente no servidor, compartilhado entre os acessos da equipe.
 
-## Executar localmente
+## Iniciar
 
-Requer Node.js. Não é necessário instalar dependências.
+Requer **Node.js 24 ou superior**. Não é necessário instalar dependências.
 
 ```sh
 npm start
 ```
 
-Abra http://localhost:3000. Também é possível executar `node preview.cjs`.
+- Site: http://127.0.0.1:3100/
+- Gestão: http://127.0.0.1:3100/sistema/
 
-## Recursos
+No primeiro acesso, crie o administrador. Não existe senha padrão no ambiente real. Os dados ficam em `.data/gym.sqlite`, fora dos arquivos públicos e do controle de versão.
 
-- Layout adaptado para celular, tablet e desktop.
-- Galeria com botões, teclado e gestos de toque.
-- Cards com contornos que acompanham os recortes e animações GSAP.
-- Anilha decorativa de 10 kg com trajeto vinculado à rolagem, recalculado conforme o tamanho da tela.
-- Suporte à preferência de movimento reduzido.
-- Imagens com tamanhos responsivos e carregamento tardio abaixo da primeira tela.
-- Bootstrap Icons em SVG local; licença em `assets/bootstrap-icons-LICENSE.txt`.
+Para executar apenas a prévia estática do site antigo na porta 3000, use `npm run preview`.
 
-## Contato e agendamento
+## Demonstração separada
 
-O formulário valida os dados e prepara uma mensagem para o WhatsApp da academia. O visitante revisa e envia a mensagem no WhatsApp; o site não confirma reservas, não salva cadastros e não possui backend.
+```sh
+npm run sistema:demo
+```
 
-## Publicação
+Abra http://127.0.0.1:3101/sistema/?demo=1. Esse ambiente usa **dados fictícios** e um banco separado, `.data/demo.sqlite`. O acesso de demonstração, intencionalmente público, é `demo@dontstop.local` / `Demonstracao!2026`. A opção de demonstração não é habilitada pelo comando de produção.
 
-Publique os arquivos da raiz em um serviço de hospedagem estática. Não existe etapa de build. O servidor `preview.cjs` serve somente para visualização local e escuta em `127.0.0.1`.
+## O que está implementado
 
-Antes de lançar uma campanha, confirme com a academia os preços, horários, endereço, telefone, condições e fotos. As bibliotecas GSAP mantêm seus avisos de licença; origem e versão estão em `assets/vendor/gsap/SOURCE.txt`.
+- **Mensalistas:** cadastro, edição, situação ativa/inativa, busca, paginação, perfil com histórico e exportação CSV.
+- **Agenda:** calendário mensal, grade semanal e lista diária; criação por data/horário, visitantes, responsáveis, duração, filtros, edição, remarcação, conclusão e cancelamento. Conflitos do mesmo responsável são recusados.
+- **Assinaturas:** vínculo ao plano, primeira cobrança, pausa, retomada, cancelamento e geração da próxima mensalidade após quitação da atual. O dia de cobrança é preservado nos finais de mês e o valor contratado não muda quando o plano é reajustado.
+- **Cobranças:** criação avulsa, vencimentos, valores em aberto/atraso, baixa manual, forma e data do pagamento, cancelamento e histórico. Pagamentos duplicados são bloqueados.
+- **Planos:** cadastro, edição de valores e condições, ativação e inativação.
+- **Equipe:** acessos individuais de administrador ou equipe, edição, desativação, redefinição de senha e revogação de sessões.
+- **Minha conta:** alteração de nome e senha com verificação da senha atual.
+- **Visão geral:** indicadores calculados a partir dos registros, recebimentos por mês, agenda de hoje e cobranças pendentes.
+- **WhatsApp:** preparação de lembretes para revisão e envio manual. Não envia mensagens sozinho.
+
+O gateway foi adiado por decisão do projeto. **Não há geração automática de Pix/boletos, débito automático, disparo automático de mensagens ou conciliação com banco.** Registrar um pagamento no painel não movimenta dinheiro.
+
+## Acesso compartilhado
+
+Todos os computadores e celulares devem acessar **o mesmo servidor**, com armazenamento persistente. Cada dispositivo usa sua própria sessão; os dados não ficam em localStorage.
+
+Copie `.env.example` para `.env` e configure quando necessário:
+
+| Variável | Uso |
+| --- | --- |
+| `PORT` | Porta do servidor, padrão 3100. |
+| `HOST` | Interface de rede; padrão 127.0.0.1. Use 0.0.0.0 no servidor de hospedagem. |
+| `APP_ORIGIN` | Origem exata do painel, por exemplo https://gestao.suaacademia.com.br. |
+| `GYM_SETUP_TOKEN` | Código exclusivo para o primeiro cadastro de administrador fora do computador local. |
+| `GYM_DATABASE` | Caminho do arquivo SQLite, caso não use .data/gym.sqlite. |
+
+Para internet, configure domínio e HTTPS no proxy da hospedagem e defina `APP_ORIGIN` com a URL HTTPS. A sessão passa a usar cookie Secure. O cadastro inicial remoto exige o código configurado no servidor. Cadastre o administrador antes de entregar os acessos à equipe.
+
+O backend Node não funciona em hospedagem puramente estática, como GitHub Pages. É necessário um serviço Node com disco persistente, uma VPS ou o container incluído. Mantenha uma única instância de aplicação apontada para o volume SQLite; não use réplicas com bancos separados.
+
+### Docker
+
+Preencha `APP_ORIGIN` e um `GYM_SETUP_TOKEN` exclusivo no ambiente do Docker Compose.
+
+```sh
+docker compose up -d --build
+```
+
+O painel fica em http://localhost:3100/sistema/ com volume persistente `dont-stop-data`. Configure a origem e o proxy HTTPS para acesso pela internet. O container usa usuário não privilegiado.
+
+## Backup
+
+```sh
+npm run backup
+```
+
+O comando usa a API de backup do SQLite, incluindo dados confirmados no WAL, e salva um novo arquivo em `.data/backups/`. Em Docker, use `docker compose exec academia node server/backup.cjs`.
+
+Guarde cópias fora do servidor. Para restaurar, pare a aplicação, copie o backup para um **novo arquivo SQLite** e configure `GYM_DATABASE` para esse arquivo antes de iniciar novamente; isso evita misturar um backup com arquivos WAL antigos. Bancos e backups contêm dados da academia e não devem ser publicados no GitHub.
+
+## Verificação
+
+```sh
+npm test
+```
+
+Os testes usam um banco temporário isolado e cobrem autenticação, permissões, origens de requisição, persistência, cadastro, cobranças, baixa duplicada, datas de renovação, remarcação, conflitos de agenda, cancelamentos, troca de senha, exportação e lógica dos calendários mensal/semanal/diário. Não exigem dados reais.
+
+## Bibliotecas e imagens
+
+GSAP e Bootstrap Icons são distribuídos localmente. Os avisos de licença estão em `assets/vendor/gsap/SOURCE.txt` e `assets/bootstrap-icons-LICENSE.txt`. As fotos do site têm variantes responsivas. Confirme com a academia preços, horários, endereço, telefone e fotos antes de uma campanha pública.

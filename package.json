@@ -4,6 +4,12 @@
   "private": true,
   "description": "Site da Academia Don't Stop em Araucária, PR",
   "scripts": {
-    "start": "node preview.cjs"
-  }
+    "start": "node --env-file-if-exists=.env server/gym.cjs",
+    "preview": "node preview.cjs",
+    "sistema": "node --env-file-if-exists=.env server/gym.cjs",
+    "sistema:demo": "node server/gym.cjs --demo",
+    "backup": "node --env-file-if-exists=.env server/backup.cjs",
+    "test": "node --test server/gym.test.cjs server/calendar.test.cjs"
+  },
+  "engines": { "node": ">=24.0.0" }
 }

@@ -1,0 +1,15 @@
+services:
+  academia:
+    build: .
+    ports:
+      - "3100:3100"
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3100
+      APP_ORIGIN: ${APP_ORIGIN:-http://localhost:3100}
+      GYM_SETUP_TOKEN: ${GYM_SETUP_TOKEN:?Defina um código exclusivo para configurar o administrador}
+    volumes:
+      - dont-stop-data:/app/.data
+    restart: unless-stopped
+volumes:
+  dont-stop-data:
