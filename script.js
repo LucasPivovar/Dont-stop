@@ -146,10 +146,6 @@ const slideInfo = [
     desc: "Espaço completo para treino funcional, ganho de força e preparação física de atletas.",
   },
   {
-    title: "Vestiários & Conforto",
-    desc: "Ambiente limpo, organizado e acolhedor para sua rotina antes e depois do treino.",
-  },
-  {
     title: "Salão Principal Don't Stop",
     desc: "Estrutura completa em Araucária unindo equipamentos de musculação e atendimento próximo.",
   },
