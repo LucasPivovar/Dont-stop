@@ -1,0 +1,11 @@
+.git
+.data
+.env
+.env.*
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.log
+node_modules
+dist-demo
+.deploy-private

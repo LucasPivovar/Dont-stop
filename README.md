@@ -19,6 +19,29 @@ Para executar apenas a prévia estática do site antigo na porta 3000, use `npm 
 
 ## Demonstração separada
 
+### Apresentação estática na Vercel
+
+Importe este repositório na Vercel usando a branch `main` e a pasta raiz. O arquivo `vercel.json` já define a compilação e a pasta de saída. Não é necessário configurar banco ou variáveis de ambiente para essa apresentação.
+
+- `/`: site da academia, com um link "Sistema" na navegação.
+- `/sistema/`: painel que abre com oito mensalistas fictícios, planos, assinaturas, cobranças e agenda preenchida.
+- Cadastros, edição, remarcação, pagamentos simulados e exportação CSV funcionam no navegador. As alterações ficam no localStorage desse navegador; não são compartilhadas com outras pessoas.
+- O botão "Restaurar demonstração" volta aos dados iniciais.
+- Ao sair, use "Explorar demonstração" ou o acesso fictício `demo@dontstop.local` / `Demonstracao!2026`.
+
+Essa versão serve para apresentar o produto. O login é simulado e os dados são públicos; não cadastre alunos reais nem senhas utilizadas em outros serviços. A versão real com banco compartilhado continua no servidor Node.
+
+Para testar a apresentação localmente:
+
+```sh
+npm run build:demo
+npm run preview:demo
+```
+
+Abra http://127.0.0.1:3200/. A compilação copia apenas arquivos públicos para `dist-demo`, com dados gerados de um banco de demonstração em memória. Ela não lê `.data`, credenciais ou o banco real. O adaptador estático é incluído somente nessa compilação; o sistema Node continua usando sua API real.
+
+### Demonstração com servidor Node
+
 ```sh
 npm run sistema:demo
 ```
