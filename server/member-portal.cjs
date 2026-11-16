@@ -77,6 +77,6 @@ async function createMemberPortal({db,demo,today,body,send,authenticate,password
     }
     fail(404,'Ação não encontrada.');
   }
-  return {handle,saveWorkout};
+  return {handle,saveWorkout,authenticateMember:member};
 }
 module.exports={createMemberPortal};

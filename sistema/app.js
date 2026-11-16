@@ -14,7 +14,7 @@ const person = member => `<div class="person">${avatar(member)}<div><button type
 const action = (name,id,label,graphic,extra='') => `<button type="button" class="icon-button ${extra}" data-action="${name}" data-id="${id}" aria-label="${e(label)}" title="${e(label)}">${icon(graphic)}</button>`;
 const button = (label,name,id='',kind='primary',graphic='plus-lg') => `<button type="button" class="button ${kind}" data-action="${name}" data-id="${id}">${graphic?icon(graphic):''}${e(label)}</button>`;
 const routes = [
-  ['visao-geral','Visão geral','grid-1x2'],['mensalistas','Mensalistas','people'],['agenda','Agenda','calendar3'],['assinaturas','Assinaturas','arrow-repeat'],['cobrancas','Cobranças','receipt'],['planos','Planos','sliders'],['profissionais','Profissionais','person-gear'],['equipe','Equipe','person-gear'],
+  ['visao-geral','Visão geral','grid-1x2'],['mensalistas','Mensalistas','people'],['agenda','Agenda','calendar3'],['assinaturas','Assinaturas','arrow-repeat'],['cobrancas','Cobranças','receipt'],['planos','Planos','sliders'],['loja','Loja','bag'],['profissionais','Profissionais','person-gear'],['equipe','Equipe','person-gear'],
 ];
 const state = { view:'visao-geral', query:'', filter:'all', page:1, date:'', calendarMode:'month', calendarFilter:'all', calendarInstructor:'', data:null, user:null, demo:false };
 let toastTimer;
@@ -59,7 +59,7 @@ function renderNavigation() {
   const overdue=state.data.invoices.filter(x=>x.display_status==='overdue').length;
   $('#navigation').innerHTML=routes.filter(x=>x[0]!=='equipe' || state.user.role==='admin').map(([route,label,graphic],i)=>`<a href="#${route}" class="nav-link ${i===5?'nav-section':''}" ${route===state.view?'aria-current="page"':''}>${icon(graphic)}${e(label)}${route==='cobrancas'&&overdue?`<span class="nav-count">${overdue}</span>`:''}</a>`).join('');
   $('#breadcrumb').textContent=routes.find(x=>x[0]===state.view)?.[1] || 'Visão geral';
-  $('#search').placeholder=({cobrancas:'Buscar cobrança…',assinaturas:'Buscar assinatura…',agenda:'Buscar na agenda…',planos:'Buscar plano…',profissionais:'Buscar profissional…',equipe:'Buscar na equipe…'})[state.view] || 'Buscar mensalista…';
+  $('#search').placeholder=({cobrancas:'Buscar cobrança…',assinaturas:'Buscar assinatura…',agenda:'Buscar na agenda…',planos:'Buscar plano…',loja:'Buscar na loja…',profissionais:'Buscar profissional…',equipe:'Buscar na equipe…'})[state.view] || 'Buscar mensalista…';
 }
 function navigate(route,preserveQuery=false) {
   if (!routes.some(x=>x[0]===route) || (route==='equipe'&&state.user?.role!=='admin')) route='visao-geral';
@@ -136,7 +136,7 @@ function teamView() {
 }
 function renderView() {
   if(!state.data) return;
-  const views={'visao-geral':dashboard,mensalistas:membersView,agenda:completeAgendaView,assinaturas:subscriptionsView,cobrancas:invoicesView,planos:plansView,profissionais:professionalsView,equipe:teamView};
+  const views={'visao-geral':dashboard,mensalistas:membersView,agenda:completeAgendaView,assinaturas:subscriptionsView,cobrancas:invoicesView,planos:plansView,loja:storeAdminView,profissionais:professionalsView,equipe:teamView};
   $('#view').innerHTML=(views[state.view] || dashboard)();
   if(state.view==='agenda')layoutCalendar();
   document.title=`${routes.find(x=>x[0]===state.view)?.[1] || 'Gestão'} • Don't Stop`;
@@ -186,7 +186,11 @@ async function handleForm(formElement) {
   const submit=formElement.querySelector('[type=submit]'), oldText=submit.textContent, box=formElement.querySelector('.form-error');
   box.hidden=true; submit.disabled=true; submit.textContent='Salvando…';
   try {
-    if(name==='professional') await api('/api/professionals'+(id?'/'+id:''),id?'PATCH':'POST',{...values,enabled:values.enabled==='1'});
+    if(name==='store-product'){await api('/api/store/products'+(id?'/'+id:''),id?'PATCH':'POST',readStoreProduct(formElement));invalidateStore();}
+    else if(name==='store-pay'){await api(`/api/store/orders/${id}/pay`,'POST',values);invalidateStore();}
+    else if(name==='store-ready'||name==='store-collect'){await api(`/api/store/orders/${id}`,'PATCH',{status:name==='store-ready'?'ready':'collected'});invalidateStore();}
+    else if(name==='store-cancel'){await api(`/api/store/orders/${id}/cancel`,'POST',{});invalidateStore();}
+    else if(name==='professional') await api('/api/professionals'+(id?'/'+id:''),id?'PATCH':'POST',{...values,enabled:values.enabled==='1'});
     else if(name==='member-assignment') await api(`/api/members/${id}/professor`,'POST',{professor_id:values.professor_id?+values.professor_id:null});
     else if(name==='member-access') await api(`/api/members/${id}/portal`,'POST',{email:values.email,password:values.password,enabled:values.enabled==='1',telemedicine:values.telemedicine==='1',discounts:values.discounts==='1',professor_id:values.professor_id?+values.professor_id:null});
     else if(name==='member-workout') await api(`/api/members/${id}/workouts/${values.weekday}`,'POST',readWorkoutForm(formElement));
@@ -245,6 +249,12 @@ document.addEventListener('click',event=>{
   if(name==='today'){state.date=state.data.today;return renderView();}
   if(name==='new-member') return memberForm();
   if(name==='edit-member') return memberForm(memberById(id));
+  if(name==='new-store-product') return storeProductForm();
+  if(name==='edit-store-product') return storeProductForm(adminStore.products.find(p=>p.id===+id));
+  if(name==='pay-store-order') return storePaymentForm(id);
+  if(name==='ready-store-order') return storeOrderConfirmation(id,'ready');
+  if(name==='collect-store-order') return storeOrderConfirmation(id,'collect');
+  if(name==='cancel-store-order') return storeOrderConfirmation(id,'cancel');
   if(name==='new-professional') return professionalForm();
   if(name==='edit-professional') return professionalForm((state.data.professionals||[]).find(p=>p.id===+id));
   if(name==='assign-professor') return assignmentForm(id);

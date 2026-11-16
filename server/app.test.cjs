@@ -36,7 +36,7 @@ function client(){
     setInterval:()=>1,clearInterval(){},setTimeout:()=>1,clearTimeout(){},
     FormData:class {constructor(form){return new Map(Object.entries(form.values));}},
     fetch:(url,options={})=>fetch(base+url,{...options,headers:{...options.headers,Origin:base,Cookie:cookie}})});
-  for(const file of ['professional-tools.js','member-tools.js','calendar.js','app.js']){
+  for(const file of ['store-tools.js','professional-tools.js','member-tools.js','calendar.js','app.js']){
     let source=fs.readFileSync(path.join(__dirname,'../sistema/'+file),'utf8');
     if(file==='app.js')source=source.replace(/boot\(\);\s*$/,'');
     vm.runInContext(source,context,{filename:file});

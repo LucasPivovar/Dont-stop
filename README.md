@@ -72,6 +72,14 @@ O portal real usa sessões próprias em cookies HttpOnly, separadas da equipe. D
 
 O gateway foi adiado por decisão do projeto. **Não há geração automática de Pix/boletos, débito automático, disparo automático de mensagens ou conciliação com banco.** Registrar um pagamento no painel não movimenta dinheiro.
 
+### Loja e PWA
+
+Em `/mensalista/#loja`, o aluno encontra suplementos e camisetas, variações de tamanho, carrinho e histórico de pedidos. A chamada também aparece nos slides da home. Em `/sistema/#loja`, a equipe configura produtos, preços e estoque e acompanha pedidos.
+
+**Nesta etapa, o checkout funciona somente na demonstração**, com produtos e valores ilustrativos. Pix, cartão de crédito no ato, pagamento na retirada e lançamento na mensalidade são simulados. Não há gateway, formulário de cartão ou cobrança real. No servidor de produção, a API bloqueia novos pedidos e pagamentos da loja. Uma simulação de compra na mensalidade cria uma cobrança separada e identificada; preserva o preço contratado do plano. Cancelar um pedido libera o estoque uma única vez.
+
+A área do mensalista possui manifest, ícones e service worker para instalação como PWA em HTTPS. O cache guarda somente arquivos públicos; respostas da API e dados financeiros não são armazenados pelo service worker. O sistema real precisa de conexão para autenticar e consultar os dados atualizados. A demonstração da Vercel usa dados fictícios persistidos apenas no navegador.
+
 ## Acesso compartilhado
 
 Todos os computadores e celulares devem acessar **o mesmo servidor**, com armazenamento persistente. Cada dispositivo usa sua própria sessão; os dados não ficam em localStorage.

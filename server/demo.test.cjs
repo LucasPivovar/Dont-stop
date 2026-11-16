@@ -7,6 +7,27 @@ const {createDemoApi}=require('../demo/api.js');
 let fixture;
 before(async()=>{await build();fixture=JSON.parse(await fs.readFile(path.join(__dirname,'../dist-demo/demo/fixture.json'),'utf8'));});
 function demo(){const values=new Map();const storage={getItem:k=>values.get(k),setItem:(k,v)=>values.set(k,v)};const clock=()=>new Date('2026-11-20T15:00:00Z');return {api:createDemoApi(fixture,storage,clock),storage,clock};}
+
+test('all portals load demo dependencies in order before their entry point',async()=>{
+  for(const page of ['sistema','mensalista','professor']){
+    const html=await fs.readFile(path.join(__dirname,'../dist-demo',page,'index.html'),'utf8');
+    const scripts=['/demo/store-api.js','/demo/professor-api.js','/demo/member-api.js','/demo/api.js','/'+page+'/'+(page==='sistema'?'calendar.js':'app.js')];
+    let previous=-1;for(const script of scripts){const at=html.indexOf('src="'+script+'"');assert.ok(at>previous,`${page}: ${script}`);previous=at;}
+  }
+});
+
+test('static shop reserves stock once, invoices separately and cancels without a charge',async()=>{
+  const {api,storage,clock}=demo();await api.handle('/api/member/login','POST',{email:'aluno1@dontstop.local',password:'Mensalista!2026'});
+  const catalog=(await api.handle('/api/member/store')).body,p=catalog.products[0],v=p.variants[0];
+  const order={items:[{variant_id:v.id,quantity:1}],expected_total_cents:p.price_cents,payment_option:'monthly',request_key:'static-order-0000001'};
+  assert.equal((await api.handle('/api/member/store/orders','POST',order)).status,422);
+  order.monthly_authorized=true;const a=await api.handle('/api/member/store/orders','POST',order);assert.equal(a.status,201);assert.equal((await api.handle('/api/member/store/orders','POST',order)).body.id,a.body.id);
+  let state=(await api.handle('/api/member/store')).body;assert.equal(state.products.find(x=>x.id===p.id).variants[0].stock,v.stock-1);assert.equal(state.orders[0].payment_status,'invoiced');
+  const reload=createDemoApi(fixture,storage,clock);assert.equal((await reload.handle('/api/member/store')).body.orders.length,1);
+  await api.handle('/api/member/logout','POST',{});await api.handle('/api/member/login','POST',{email:'aluno2@dontstop.local',password:'Mensalista!2026'});assert.equal((await api.handle('/api/member/store')).body.orders.length,0);assert.equal((await api.handle(`/api/member/store/orders/${a.body.id}/cancel`,'POST',{})).status,404);
+  await api.handle('/api/member/login','POST',{email:'aluno1@dontstop.local',password:'Mensalista!2026'});assert.equal((await api.handle(`/api/member/store/orders/${a.body.id}/cancel`,'POST',{})).status,200);await api.handle(`/api/member/store/orders/${a.body.id}/cancel`,'POST',{});
+  state=(await api.handle('/api/member/store')).body;assert.equal(state.products.find(x=>x.id===p.id).variants[0].stock,v.stock);assert.equal(state.orders[0].status,'canceled');
+});
 test('static build exposes only public files and starts with fictional records',async()=>{
   const {api}=demo(),result=await api.handle('/api/state');assert.equal(result.status,200);assert.equal(result.body.today,'2026-11-20');assert.equal(result.body.members.length,8);assert.equal(result.body.appointments.length,16);assert.equal(result.body.demo,true);
   assert.equal(JSON.stringify(fixture).includes('password_hash'),false);

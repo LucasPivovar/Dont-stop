@@ -6,6 +6,7 @@ const { promisify } = require('node:util');
 const { DatabaseSync } = require('node:sqlite');
 const {createMemberPortal}=require('./member-portal.cjs');
 const {createProfessorPortal}=require('./professor-portal.cjs');
+const {createStore}=require('./store.cjs');
 const scrypt = promisify(crypto.scrypt);
 const ROOT = path.resolve(__dirname, '..');
 const METHODS = ['pix', 'dinheiro', 'cartao', 'transferencia'];
@@ -180,7 +181,9 @@ async function createGymServer(options = {}) {
 
   const memberPortal=await createMemberPortal({db,demo,today,body,send,authenticate,passwordHash,passwordMatches,day,text,phone,email,fail});
   const professorPortal=await createProfessorPortal({db,demo,today,body,send,authenticate,passwordHash,passwordMatches,text,email,fail,transaction,memberPortal,secure:!!configuredOrigin?.startsWith('https://')});
+  const store=await createStore({db,demo,today,body,send,authenticate,memberPortal,transaction,text,amount,fail,monthAfter});
   async function api(req, res, pathname) {
+    if(pathname==='/api/member/store'||pathname.startsWith('/api/member/store/')||pathname.startsWith('/api/store/'))return store.handle(req,res,pathname);
     if(pathname.startsWith('/api/professor/')||pathname==='/api/professionals'||/^\/api\/professionals\/\d+$/.test(pathname)||/^\/api\/members\/\d+\/professor$/.test(pathname))return professorPortal.handle(req,res,pathname);
     if(pathname.startsWith('/api/member/')||/^\/api\/members\/\d+\/(portal|workouts)(?:\/[0-6])?$/.test(pathname))return memberPortal.handle(req,res,pathname);
     const method = req.method;
@@ -337,6 +340,7 @@ async function createGymServer(options = {}) {
     const invoiceMatch = pathname.match(/^\/api\/invoices\/(\d+)\/(pay|cancel)$/);
     if (invoiceMatch && method === 'POST') {
       const invoice = exists('invoices',invoiceMatch[1]);
+      if(invoiceMatch[2]==='cancel'&&one("SELECT id FROM store_orders WHERE invoice_id=? AND status<>'canceled'",invoice.id))fail(409,'Cancele o pedido na Loja para liberar o estoque e cancelar a cobrança.');
       transaction(() => {
         if (invoice.status !== 'pending') fail(409, 'Esta cobrança já foi paga ou cancelada.');
         if (invoiceMatch[2] === 'pay') {
@@ -372,7 +376,7 @@ async function createGymServer(options = {}) {
     fail(404, 'Ação não encontrada.');
   }
 
-  const types = { '.ttf':'font/ttf', '.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.jpg':'image/jpeg' };
+  const types = { '.webmanifest':'application/manifest+json', '.ttf':'font/ttf', '.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.jpg':'image/jpeg' };
   const marketingFiles = new Set(['/index.html','/styles.css','/script.js','/plate-scroll.js','/card-motion.js']);
   const server = http.createServer(async (req,res) => {
     res.setHeader('X-Content-Type-Options','nosniff');
@@ -387,7 +391,7 @@ async function createGymServer(options = {}) {
       if(pathname==='/mensalista'){res.writeHead(302,{Location:'/mensalista/'});return res.end();}
       if (pathname === '/sistema') { res.writeHead(302,{Location:'/sistema/'}); return res.end(); }
       const target = pathname === '/' ? '/index.html' : pathname === '/sistema/' ? '/sistema/index.html' : pathname==='/mensalista/'?'/mensalista/index.html':pathname==='/professor/'?'/professor/index.html':pathname;
-      if (!marketingFiles.has(target) && !target.startsWith('/assets/') && !['/sistema/index.html','/sistema/app.js','/sistema/calendar.js','/sistema/styles.css','/sistema/member-tools.js','/sistema/professional-tools.js','/mensalista/index.html','/mensalista/styles.css','/mensalista/app.js','/professor/index.html','/professor/app.js','/professor/styles.css'].includes(target)) fail(404,'Página não encontrada.');
+      if (!marketingFiles.has(target) && !target.startsWith('/assets/') && !['/sistema/index.html','/sistema/app.js','/sistema/calendar.js','/sistema/styles.css','/sistema/member-tools.js','/sistema/professional-tools.js','/sistema/store-tools.js','/mensalista/index.html','/mensalista/styles.css','/mensalista/app.js','/mensalista/store.js','/mensalista/store.css','/mensalista/sw.js','/mensalista/manifest.webmanifest','/professor/index.html','/professor/app.js','/professor/styles.css'].includes(target)) fail(404,'Página não encontrada.');
       const file = path.resolve(ROOT,'.'+target);
       if (!file.startsWith(ROOT+path.sep)) fail(403,'Acesso não autorizado.');
       if (target.startsWith('/assets/') && !file.startsWith(path.join(ROOT,'assets')+path.sep)) fail(403,'Acesso não autorizado.');

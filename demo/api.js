@@ -1,7 +1,7 @@
 (function (root) {
   'use strict';
   function createDemoApi(seed, storage, clock = () => new Date()) {
-    const key = 'dontstop-presentation-v3';
+    const key = 'dontstop-presentation-v4';
     const clone = value => JSON.parse(JSON.stringify(value));
     const today = () => new Intl.DateTimeFormat('en-CA', {timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).format(clock());
     const fail = (status, message) => { throw Object.assign(new Error(message), {status}); };
@@ -17,6 +17,7 @@
     let db;
     try { db=JSON.parse(storage.getItem(key)); } catch {}
     if(!db||!Array.isArray(db.members)||!Array.isArray(db.users))db=initial();
+    const storeDemo=(typeof module==='object'&&module.exports?require('./store-api.js').createStoreDemoApi:root.createStoreDemoApi)({get:()=>db,save:data=>{storage.setItem(key,JSON.stringify(data));db=data;},today});
     const professorDemo=(typeof module==='object'&&module.exports?require('./professor-api.js').createProfessorDemoApi:root.createProfessorDemoApi)({get:()=>db,save:data=>{storage.setItem(key,JSON.stringify(data));db=data;},today});
     const memberDemo=(typeof module==='object'&&module.exports?require('./member-api.js').createMemberDemoApi:root.createMemberDemoApi)({get:()=>db,save:data=>{storage.setItem(key,JSON.stringify(data));db=data;},today});
     const find=(data,table,id)=>data[table].find(x=>x.id===+id)||fail(404,'Registro não encontrado.');
@@ -36,6 +37,7 @@
     async function handle(path, method='GET', b={}) {
       try {
         try{const persisted=JSON.parse(storage.getItem(key));if(persisted&&Array.isArray(persisted.professional_profiles))db=persisted;}catch{}
+        if(path==='/api/member/store'||path.startsWith('/api/member/store/')||path.startsWith('/api/store/'))return await storeDemo.handle(path,method,b);
         if(path.startsWith('/api/professor/')||path==='/api/professionals'||/^\/api\/professionals\/\d+$/.test(path)||/^\/api\/members\/\d+\/professor$/.test(path))return await professorDemo.handle(path,method,b);
         if(path.startsWith('/api/member/')||/^\/api\/members\/\d+\/(portal|workouts)(?:\/[0-6])?$/.test(path))return await memberDemo.handle(path,method,b);
         if(path==='/api/auth/status')return {status:200,body:{user:safeUser(user(db)),setupRequired:false,demo:true,today:today()}};
@@ -71,7 +73,7 @@
             }else{if(!['active','paused','canceled'].includes(b.status))fail(422,'Situação inválida.');if(sub.status==='canceled'&&b.status!=='canceled')fail(409,'Cadastre uma nova assinatura.');sub.status=b.status;}
           }else if(table==='invoices'&&!id){find(data,'members',b.member_id);result={id:add(data,table,{member_id:+b.member_id,description:text(b.description,true),amount_cents:amount(b.amount_cents),due_date:day(b.due_date),status:'pending',subscription_id:null}).id};status=201;
           }else if(table==='invoices'&&['pay','cancel'].includes(operation)){
-            const invoice=find(data,table,id);if(invoice.status!=='pending')fail(409,'Esta cobrança já foi paga ou cancelada.');if(operation==='cancel')invoice.status='canceled';else{if(!['pix','dinheiro','cartao','transferencia'].includes(b.method))fail(422,'Escolha uma forma de pagamento.');const paid=day(b.paid_on||today());if(paid>today())fail(422,'O pagamento não pode ter data futura.');add(data,'payments',{invoice_id:invoice.id,amount_cents:invoice.amount_cents,method:b.method,paid_on:paid,user_id:current.id});invoice.status='paid';}
+            const invoice=find(data,table,id);if(invoice.status!=='pending')fail(409,'Esta cobrança já foi paga ou cancelada.');if(operation==='cancel'){if(data.store_orders.some(o=>o.invoice_id===invoice.id&&o.status!=='canceled'))fail(409,'Cancele o pedido na Loja para liberar o estoque.');invoice.status='canceled';}else{if(!['pix','dinheiro','cartao','transferencia'].includes(b.method))fail(422,'Escolha uma forma de pagamento.');const paid=day(b.paid_on||today());if(paid>today())fail(422,'O pagamento não pode ter data futura.');add(data,'payments',{invoice_id:invoice.id,amount_cents:invoice.amount_cents,method:b.method,paid_on:paid,user_id:current.id});invoice.status='paid';}
           }else if(table==='appointments'){
             const previous=id?find(data,table,id):{},row={...previous,...b};row.member_id=row.member_id?find(data,'members',row.member_id).id:null;row.contact_name=text(row.contact_name,!row.member_id);row.kind=text(row.kind,true);row.instructor=text(row.instructor||'Equipe Don’t Stop',true).replace(/\s+/g,' ');if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(row.starts_at||''))fail(422,'Informe data e horário válidos.');day(row.starts_at.slice(0,10));if(+row.starts_at.slice(11,13)>23||+row.starts_at.slice(14)>59)fail(422,'Horário inválido.');const duration=b.duration_minutes??(previous.ends_at?(Date.parse(previous.ends_at+'Z')-Date.parse(previous.starts_at+'Z'))/60000:45);if(!Number.isInteger(+duration)||duration<15||duration>240)fail(422,'A duração deve ser de 15 a 240 minutos.');row.ends_at=new Date(Date.parse(row.starts_at+'Z')+duration*60000).toISOString().slice(0,16);if(row.ends_at.slice(0,10)!==row.starts_at.slice(0,10)&&!row.ends_at.endsWith('T00:00'))fail(422,'O atendimento deve terminar até meia-noite.');row.status=row.status||'scheduled';if(!['scheduled','completed','canceled'].includes(row.status))fail(422,'Situação inválida.');if(row.status==='scheduled'&&data.appointments.some(a=>a.id!==previous.id&&a.status==='scheduled'&&a.starts_at<row.ends_at&&a.ends_at>row.starts_at&&(a.instructor.toLowerCase()===row.instructor.toLowerCase()||(row.member_id&&a.member_id===row.member_id))))fail(409,'O responsável ou mensalista já tem um agendamento nesse horário.');delete row.duration_minutes;if(id)Object.assign(previous,row);else{result={id:add(data,table,row).id};status=201;}
           }else if(table==='users'){
