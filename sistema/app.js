@@ -14,7 +14,7 @@ const person = member => `<div class="person">${avatar(member)}<div><button type
 const action = (name,id,label,graphic,extra='') => `<button type="button" class="icon-button ${extra}" data-action="${name}" data-id="${id}" aria-label="${e(label)}" title="${e(label)}">${icon(graphic)}</button>`;
 const button = (label,name,id='',kind='primary',graphic='plus-lg') => `<button type="button" class="button ${kind}" data-action="${name}" data-id="${id}">${graphic?icon(graphic):''}${e(label)}</button>`;
 const routes = [
-  ['visao-geral','Visão geral','grid-1x2'],['mensalistas','Mensalistas','people'],['agenda','Agenda','calendar3'],['assinaturas','Assinaturas','arrow-repeat'],['cobrancas','Cobranças','receipt'],['planos','Planos','sliders'],['equipe','Equipe','person-gear'],
+  ['visao-geral','Visão geral','grid-1x2'],['mensalistas','Mensalistas','people'],['agenda','Agenda','calendar3'],['assinaturas','Assinaturas','arrow-repeat'],['cobrancas','Cobranças','receipt'],['planos','Planos','sliders'],['profissionais','Profissionais','person-gear'],['equipe','Equipe','person-gear'],
 ];
 const state = { view:'visao-geral', query:'', filter:'all', page:1, date:'', calendarMode:'month', calendarFilter:'all', calendarInstructor:'', data:null, user:null, demo:false };
 let toastTimer;
@@ -41,7 +41,7 @@ function form(content,name,id='',submit='Salvar') { return `<form class="form-gr
 function openModal(title,content) { lastFocus=document.activeElement; $('#modal-title').textContent=title; $('#modal-content').innerHTML=content; if (!$('#modal').open) $('#modal').showModal(); }
 function closeModal() { $('#modal').close(); lastFocus?.focus?.(); }
 function empty(title,copy,graphic='people',cta='') { return `<div class="empty">${icon(graphic)}<h3>${e(title)}</h3><p>${e(copy)}</p>${cta}</div>`; }
-function table(headers,rows,blank) { return rows.length ? `<div class="table-wrap" role="region" aria-label="Lista de registros" tabindex="0"><table><thead><tr>${headers.map(h=>`<th scope="col">${e(h)}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>` : blank; }
+function table(headers,rows,blank) { return rows.length ? `<div class="table-wrap" role="region" aria-label="Lista de registros" tabindex="0"><table class="${headers.at(-1)==='Ações'?'has-actions':''}"><thead><tr>${headers.map(h=>`<th scope="col"${h==='Ações'?' class="actions-column"':''}>${e(h)}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>` : blank; }
 function paginate(items) {
   const pages=Math.max(1,Math.ceil(items.length/10)); state.page=Math.min(state.page,pages);
   return {rows:items.slice((state.page-1)*10,state.page*10),footer:`<div class="table-footer"><span>${items.length?`${(state.page-1)*10+1}–${Math.min(state.page*10,items.length)} de ${items.length} registros`:'Nenhum registro'}</span><div class="pagination"><button type="button" data-action="page" data-id="${state.page-1}" aria-label="Página anterior" ${state.page===1?'disabled':''}>${icon('chevron-left')}</button><span>${state.page} / ${pages}</span><button type="button" data-action="page" data-id="${state.page+1}" aria-label="Próxima página" ${state.page===pages?'disabled':''}>${icon('chevron-right')}</button></div></div>`};
@@ -59,7 +59,7 @@ function renderNavigation() {
   const overdue=state.data.invoices.filter(x=>x.display_status==='overdue').length;
   $('#navigation').innerHTML=routes.filter(x=>x[0]!=='equipe' || state.user.role==='admin').map(([route,label,graphic],i)=>`<a href="#${route}" class="nav-link ${i===5?'nav-section':''}" ${route===state.view?'aria-current="page"':''}>${icon(graphic)}${e(label)}${route==='cobrancas'&&overdue?`<span class="nav-count">${overdue}</span>`:''}</a>`).join('');
   $('#breadcrumb').textContent=routes.find(x=>x[0]===state.view)?.[1] || 'Visão geral';
-  $('#search').placeholder=({cobrancas:'Buscar cobrança…',assinaturas:'Buscar assinatura…',agenda:'Buscar na agenda…',planos:'Buscar plano…',equipe:'Buscar na equipe…'})[state.view] || 'Buscar mensalista…';
+  $('#search').placeholder=({cobrancas:'Buscar cobrança…',assinaturas:'Buscar assinatura…',agenda:'Buscar na agenda…',planos:'Buscar plano…',profissionais:'Buscar profissional…',equipe:'Buscar na equipe…'})[state.view] || 'Buscar mensalista…';
 }
 function navigate(route,preserveQuery=false) {
   if (!routes.some(x=>x[0]===route) || (route==='equipe'&&state.user?.role!=='admin')) route='visao-geral';
@@ -109,7 +109,7 @@ function membersView() {
   if(state.filter!=='all') items=items.filter(x=>x.status===state.filter);
   const p=paginate(items);
   return header('Mensalistas','Pessoas, contatos e histórico de cada jornada.',`<a class="button ghost" href="/api/export/members.csv">${icon('download')}Exportar</a>${button('Novo mensalista','new-member')}`)+
-  `<section class="panel"><div class="toolbar">${tabs([['all','Todos',state.data.members.length],['active','Ativos'],['inactive','Inativos']])}<span class="toolbar-note">${items.length} mensalistas encontrados</span></div>${table(['Mensalista','Plano atual','Cadastro','Situação','Ações'],p.rows.map(m=>{const sub=state.data.subscriptions.find(s=>s.member_id===m.id&&s.status!=='canceled');return `<tr><td>${person(m)}</td><td>${sub?`<span class="table-main">${e(sub.plan_name)}</span><span class="cell-secondary">${money(sub.amount_cents)} / mês</span>`:'<span class="muted">Sem assinatura</span>'}</td><td>${formatDate(m.joined_on)}</td><td>${badge(m.status,m.status==='active'?'Ativo':'Inativo')}</td><td><div class="row-actions">${action('profile',m.id,'Ver histórico de '+m.name,'people')}${action('member-portal',m.id,'Área do mensalista e treinos','person-gear')+action('edit-member',m.id,'Editar '+m.name,'pencil')}${!sub&&m.status==='active'?action('new-subscription',m.id,'Vincular plano','plus-lg'):''}</div></td></tr>`;}),empty('Nenhum mensalista por aqui','Cadastre a primeira pessoa ou ajuste sua busca.','people',button('Cadastrar mensalista','new-member','','ghost')))}${p.footer}</section>`;
+  `<section class="panel"><div class="toolbar">${tabs([['all','Todos',state.data.members.length],['active','Ativos'],['inactive','Inativos']])}<span class="toolbar-note">${items.length} mensalistas encontrados</span></div>${table(['Mensalista','Plano atual','Professor','Cadastro','Situação','Ações'],p.rows.map(m=>{const sub=state.data.subscriptions.find(s=>s.member_id===m.id&&s.status!=='canceled');return `<tr><td>${person(m)}</td><td>${sub?`<span class="table-main">${e(sub.plan_name)}</span><span class="cell-secondary">${money(sub.amount_cents)} / mês</span>`:'<span class="muted">Sem assinatura</span>'}</td><td><button class="assignment-button" type="button" data-action="assign-professor" data-id="${m.id}">${e(m.professor_name||'Vincular professor')}${icon(m.professor_id?'pencil':'plus-lg')}</button></td><td>${formatDate(m.joined_on)}</td><td>${badge(m.status,m.status==='active'?'Ativo':'Inativo')}</td><td><div class="row-actions">${action('profile',m.id,'Ver histórico de '+m.name,'people')}${action('member-portal',m.id,'Área do mensalista e treinos','person-gear')+action('edit-member',m.id,'Editar '+m.name,'pencil')}${!sub&&m.status==='active'?action('new-subscription',m.id,'Vincular plano','plus-lg'):''}</div></td></tr>`;}),empty('Nenhum mensalista por aqui','Cadastre a primeira pessoa ou ajuste sua busca.','people',button('Cadastrar mensalista','new-member','','ghost')))}${p.footer}</section>`;
 }
 function subscriptionsView() {
   let items=searched(state.data.subscriptions,['member_name','plan_name']);
@@ -136,7 +136,7 @@ function teamView() {
 }
 function renderView() {
   if(!state.data) return;
-  const views={'visao-geral':dashboard,mensalistas:membersView,agenda:completeAgendaView,assinaturas:subscriptionsView,cobrancas:invoicesView,planos:plansView,equipe:teamView};
+  const views={'visao-geral':dashboard,mensalistas:membersView,agenda:completeAgendaView,assinaturas:subscriptionsView,cobrancas:invoicesView,planos:plansView,profissionais:professionalsView,equipe:teamView};
   $('#view').innerHTML=(views[state.view] || dashboard)();
   if(state.view==='agenda')layoutCalendar();
   document.title=`${routes.find(x=>x[0]===state.view)?.[1] || 'Gestão'} • Don't Stop`;
@@ -186,7 +186,9 @@ async function handleForm(formElement) {
   const submit=formElement.querySelector('[type=submit]'), oldText=submit.textContent, box=formElement.querySelector('.form-error');
   box.hidden=true; submit.disabled=true; submit.textContent='Salvando…';
   try {
-    if(name==='member-access') await api(`/api/members/${id}/portal`,'POST',{email:values.email,password:values.password,enabled:values.enabled==='1',telemedicine:values.telemedicine==='1',discounts:values.discounts==='1'});
+    if(name==='professional') await api('/api/professionals'+(id?'/'+id:''),id?'PATCH':'POST',{...values,enabled:values.enabled==='1'});
+    else if(name==='member-assignment') await api(`/api/members/${id}/professor`,'POST',{professor_id:values.professor_id?+values.professor_id:null});
+    else if(name==='member-access') await api(`/api/members/${id}/portal`,'POST',{email:values.email,password:values.password,enabled:values.enabled==='1',telemedicine:values.telemedicine==='1',discounts:values.discounts==='1',professor_id:values.professor_id?+values.professor_id:null});
     else if(name==='member-workout') await api(`/api/members/${id}/workouts/${values.weekday}`,'POST',readWorkoutForm(formElement));
     else if(name==='member') await api('/api/members'+(id?'/'+id:''),id?'PATCH':'POST',values);
     else if(name==='subscription') await api('/api/subscriptions','POST',{...values,member_id:+values.member_id,plan_id:+values.plan_id});
@@ -205,6 +207,7 @@ async function handleForm(formElement) {
   } catch(error) { box.innerHTML=errorBox(error.message); box.hidden=false; box.scrollIntoView({block:'nearest'}); }
   finally { submit.disabled=false; submit.textContent=oldText; }
 }
+function focusSearchShortcut(event) {const active=document.activeElement;if(event.key!=='/'||event.defaultPrevented||event.ctrlKey||event.metaKey||event.altKey||event.isComposing||!state.user||$('#modal').open||['INPUT','TEXTAREA','SELECT'].includes(active?.tagName)||active?.isContentEditable||active?.closest?.('[contenteditable="true"],[role="textbox"]'))return false;event.preventDefault();$('#search').focus();return true;}
 function setMenu(open) { $('#sidebar').classList.toggle('open',open); $('#nav-overlay').hidden=!open; $('#menu-toggle').setAttribute('aria-expanded',String(open)); $('#menu-toggle').setAttribute('aria-label',open?'Fechar menu':'Abrir menu'); }
 function authScreen(status,message='') {
   $('#shell').hidden=true; $('#boot').hidden=true; $('#auth').hidden=false;
@@ -242,6 +245,9 @@ document.addEventListener('click',event=>{
   if(name==='today'){state.date=state.data.today;return renderView();}
   if(name==='new-member') return memberForm();
   if(name==='edit-member') return memberForm(memberById(id));
+  if(name==='new-professional') return professionalForm();
+  if(name==='edit-professional') return professionalForm((state.data.professionals||[]).find(p=>p.id===+id));
+  if(name==='assign-professor') return assignmentForm(id);
   if(name==='member-portal') return openMemberPortal(id);
   if(name==='profile') return profile(memberById(id));
   if(name==='new-subscription') return subscriptionForm(id);
@@ -264,7 +270,7 @@ $('#my-account').addEventListener('click',accountForm);
 $('#nav-overlay').addEventListener('click',()=>setMenu(false));
 $('#modal-close').addEventListener('click',closeModal);
 $('#modal').addEventListener('cancel',()=>lastFocus?.focus?.());
-document.addEventListener('keydown',event=>{if((event.key==='Enter'||event.key===' ')&&event.target.matches('.calendar-day-track')){event.preventDefault();state.date=event.target.dataset.id;appointmentForm();return;}if(event.key==='Escape'&&$('#sidebar').classList.contains('open')){setMenu(false);$('#menu-toggle').focus();}if(event.key==='/'&&state.user&&!$('#modal').open&&!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)){event.preventDefault();$('#search').focus();}});
+document.addEventListener('keydown',event=>{if((event.key==='Enter'||event.key===' ')&&event.target.matches('.calendar-day-track')){event.preventDefault();state.date=event.target.dataset.id;appointmentForm();return;}if(event.key==='Escape'&&$('#sidebar').classList.contains('open')){setMenu(false);$('#menu-toggle').focus();}focusSearchShortcut(event);});
 $('#refresh').addEventListener('click',async event=>{event.currentTarget.disabled=true;try{await loadData();notify('Dados atualizados.');}catch(error){notify(error.message);}finally{$('#refresh').disabled=false;}});
 $('#logout').addEventListener('click',async()=>{try{await api('/api/auth/logout','POST',{});state.user=null;state.data=null;clearInterval(refreshTimer);await boot();}catch(error){notify(error.message);}});
 window.addEventListener('hashchange',()=>{if(state.user)navigate(location.hash.slice(1));});

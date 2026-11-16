@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" fill="none">
-  <title>Anilha de 10 kg Don't Stop</title>
+  <title>Anilha decorativa</title>
   <defs>
     <linearGradient id="rubber" x1="25" y1="16" x2="153" y2="166" gradientUnits="userSpaceOnUse"><stop stop-color="#4a484b"/><stop offset=".35" stop-color="#252326"/><stop offset="1" stop-color="#111013"/></linearGradient>
     <linearGradient id="steel" x1="70" y1="67" x2="109" y2="114" gradientUnits="userSpaceOnUse"><stop stop-color="#e1dfe2"/><stop offset=".4" stop-color="#77737b"/><stop offset=".65" stop-color="#dad7dd"/><stop offset="1" stop-color="#514d55"/></linearGradient>
@@ -15,6 +15,4 @@
     <circle cx="90" cy="90" r="19" fill="url(#steel)"/>
     <circle cx="90" cy="90" r="13" stroke="#080708" stroke-width="2"/>
   </g>
-  <text x="90" y="46" fill="#f5f3f5" font-family="Arial, sans-serif" font-size="24" font-weight="900" text-anchor="middle" letter-spacing=".5">10 KG</text>
-  <text x="90" y="162" fill="#e7e3e9" font-family="Arial, sans-serif" font-size="10.5" font-weight="800" text-anchor="middle" letter-spacing=".6">DON’T STOP</text>
 </svg>

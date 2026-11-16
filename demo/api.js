@@ -1,7 +1,7 @@
 (function (root) {
   'use strict';
   function createDemoApi(seed, storage, clock = () => new Date()) {
-    const key = 'dontstop-presentation-v2';
+    const key = 'dontstop-presentation-v3';
     const clone = value => JSON.parse(JSON.stringify(value));
     const today = () => new Intl.DateTimeFormat('en-CA', {timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).format(clock());
     const fail = (status, message) => { throw Object.assign(new Error(message), {status}); };
@@ -17,23 +17,26 @@
     let db;
     try { db=JSON.parse(storage.getItem(key)); } catch {}
     if(!db||!Array.isArray(db.members)||!Array.isArray(db.users))db=initial();
+    const professorDemo=(typeof module==='object'&&module.exports?require('./professor-api.js').createProfessorDemoApi:root.createProfessorDemoApi)({get:()=>db,save:data=>{storage.setItem(key,JSON.stringify(data));db=data;},today});
     const memberDemo=(typeof module==='object'&&module.exports?require('./member-api.js').createMemberDemoApi:root.createMemberDemoApi)({get:()=>db,save:data=>{storage.setItem(key,JSON.stringify(data));db=data;},today});
     const find=(data,table,id)=>data[table].find(x=>x.id===+id)||fail(404,'Registro não encontrado.');
     const add=(data,table,row)=>{const item={...row,id:Math.max(0,...data[table].map(x=>x.id))+1};data[table].push(item);return item;};
-    const user=data=>data.signedOut?null:data.users.find(x=>x.id===data.currentUser&&x.enabled);
+    const user=data=>data.signedOut?null:data.users.find(x=>x.id===data.currentUser&&x.enabled&&!data.professional_profiles.some(p=>p.user_id===x.id));
     const safeUser=u=>u?{id:u.id,name:u.name,email:u.email,role:u.role}:null;
     function state(data) {
-      const result=clone(data);result.today=today();result.user=safeUser(user(data));result.demo=true;
+      const result=clone(data);result.professionals=professorDemo.list(data);result.members=result.members.map(m=>{const a=data.member_professors.find(a=>a.member_id===m.id);return {...m,professor_id:a?.user_id||null,professor_name:a?data.users.find(u=>u.id===a.user_id)?.name:null};});result.today=today();result.user=safeUser(user(data));result.demo=true;
       result.subscriptions=result.subscriptions.map(s=>({...s,member_name:find(data,'members',s.member_id).name,plan_name:find(data,'plans',s.plan_id).name}));
       result.invoices=result.invoices.map(i=>({...i,member_name:find(data,'members',i.member_id).name,member_phone:find(data,'members',i.member_id).phone,display_status:i.status==='pending'&&i.due_date<today()?'overdue':i.status})).sort((a,b)=>a.due_date.localeCompare(b.due_date));
       result.payments=result.payments.map(p=>({...p,member_name:find(data,'members',find(data,'invoices',p.invoice_id).member_id).name}));
       result.appointments=result.appointments.map(a=>({...a,member_name:a.member_id?find(data,'members',a.member_id).name:a.contact_name})).sort((a,b)=>a.starts_at.localeCompare(b.starts_at));
-      result.users=result.user?.role==='admin'?data.users.map(u=>({...safeUser(u),enabled:u.enabled})):[];
+      result.users=result.user?.role==='admin'?data.users.filter(u=>!data.professional_profiles.some(p=>p.user_id===u.id)).map(u=>({...safeUser(u),enabled:u.enabled})):[];
       delete result.currentUser;delete result.signedOut;return result;
     }
     async function hash(value) {const bytes=await root.crypto.subtle.digest('SHA-256',new TextEncoder().encode(value));return Array.from(new Uint8Array(bytes),x=>x.toString(16).padStart(2,'0')).join('');}
     async function handle(path, method='GET', b={}) {
       try {
+        try{const persisted=JSON.parse(storage.getItem(key));if(persisted&&Array.isArray(persisted.professional_profiles))db=persisted;}catch{}
+        if(path.startsWith('/api/professor/')||path==='/api/professionals'||/^\/api\/professionals\/\d+$/.test(path)||/^\/api\/members\/\d+\/professor$/.test(path))return await professorDemo.handle(path,method,b);
         if(path.startsWith('/api/member/')||/^\/api\/members\/\d+\/(portal|workouts)(?:\/[0-6])?$/.test(path))return await memberDemo.handle(path,method,b);
         if(path==='/api/auth/status')return {status:200,body:{user:safeUser(user(db)),setupRequired:false,demo:true,today:today()}};
         if(path==='/api/state'&&method==='GET'){if(!user(db))fail(401,'Entre na demonstração para continuar.');return {status:200,body:state(db)};}
@@ -45,6 +48,7 @@
         const data=clone(db);let result={ok:true},status=200;
         if(path==='/api/auth/login'){
           const match=data.users.find(u=>u.email===text(b.email).toLowerCase()&&u.enabled);
+          if(match&&data.professional_profiles.some(p=>p.user_id===match.id))fail(403,'Use a área do professor para entrar com este acesso.');
           const valid=match&&(match.password_digest?match.password_digest===await hash(b.password||''):match.id===seed.user.id&&b.password==='Demonstracao!2026');
           if(!valid)fail(401,'E-mail ou senha da demonstração inválidos.');data.currentUser=match.id;data.signedOut=false;result={user:safeUser(match)};
         }else{

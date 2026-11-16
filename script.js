@@ -87,6 +87,17 @@ if (bookingForm && bookingFeedback) {
   const phoneInput = document.getElementById("booking-phone");
   const nameInput = document.getElementById("booking-name");
   const planSelect = document.getElementById("booking-plan");
+  document.querySelectorAll('a[href="#agendar"]').forEach((link) => {
+    link.addEventListener("click", (event) => {
+      if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      event.preventDefault();
+      if (link.dataset.plan) planSelect.value = link.dataset.plan;
+      else if (link.classList.contains("trial-cta") || link.classList.contains("about-link")) planSelect.value = "Treino Experimental Gratuito";
+      history.replaceState(null, "", "#agendar");
+      document.getElementById("agendar").scrollIntoView({behavior: reducedMotion.matches ? "auto" : "smooth", block: "start"});
+      nameInput.focus({preventScroll: true});
+    });
+  });
   bookingForm.addEventListener("input", () => {
     phoneInput.setCustomValidity("");
     nameInput.setCustomValidity("");

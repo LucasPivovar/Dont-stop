@@ -5,6 +5,7 @@ const crypto = require('node:crypto');
 const { promisify } = require('node:util');
 const { DatabaseSync } = require('node:sqlite');
 const {createMemberPortal}=require('./member-portal.cjs');
+const {createProfessorPortal}=require('./professor-portal.cjs');
 const scrypt = promisify(crypto.scrypt);
 const ROOT = path.resolve(__dirname, '..');
 const METHODS = ['pix', 'dinheiro', 'cartao', 'transferencia'];
@@ -154,7 +155,7 @@ async function createGymServer(options = {}) {
   function authenticate(req) {
     const token = cookie(req);
     const user = token && one('SELECT u.id,u.name,u.email,u.role FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>? AND u.enabled=1', tokenHash(token), Date.now());
-    if (!user) fail(401, 'Entre na sua conta para continuar.');
+    if (!user || one('SELECT user_id FROM professionals WHERE user_id=?',user.id)) fail(401, 'Entre na sua conta da equipe para continuar.');
     return user;
   }
   async function session(req, res, user) {
@@ -178,7 +179,9 @@ async function createGymServer(options = {}) {
   const invoiceWithStatus = row => ({ ...row, display_status: row.status === 'pending' && row.due_date < today() ? 'overdue' : row.status });
 
   const memberPortal=await createMemberPortal({db,demo,today,body,send,authenticate,passwordHash,passwordMatches,day,text,phone,email,fail});
+  const professorPortal=await createProfessorPortal({db,demo,today,body,send,authenticate,passwordHash,passwordMatches,text,email,fail,transaction,memberPortal,secure:!!configuredOrigin?.startsWith('https://')});
   async function api(req, res, pathname) {
+    if(pathname.startsWith('/api/professor/')||pathname==='/api/professionals'||/^\/api\/professionals\/\d+$/.test(pathname)||/^\/api\/members\/\d+\/professor$/.test(pathname))return professorPortal.handle(req,res,pathname);
     if(pathname.startsWith('/api/member/')||/^\/api\/members\/\d+\/(portal|workouts)(?:\/[0-6])?$/.test(pathname))return memberPortal.handle(req,res,pathname);
     const method = req.method;
     if (pathname === '/api/auth/status' && method === 'GET') {
@@ -207,19 +210,21 @@ async function createGymServer(options = {}) {
         if (failures.size > 1000) for (const [k, v] of failures) if (v.until < Date.now()) failures.delete(k);
         fail(401, 'E-mail ou senha incorretos.');
       }
+      if(one('SELECT user_id FROM professionals WHERE user_id=?',user.id))fail(403,'Use a área do professor para entrar com este acesso.');
       failures.delete(key);
       return session(req, res, user);
     }
     const user = authenticate(req);
     if (pathname === '/api/state' && method === 'GET') return send(res, 200, {
       today: today(), demo, user,
-      members: all('SELECT * FROM members ORDER BY name COLLATE NOCASE'),
+      members: all('SELECT m.*,a.user_id professor_id,u.name professor_name FROM members m LEFT JOIN member_professors a ON a.member_id=m.id LEFT JOIN users u ON u.id=a.user_id ORDER BY m.name COLLATE NOCASE'),
+      professionals: professorPortal.professionals(),
       plans: all('SELECT * FROM plans ORDER BY enabled DESC,id'),
       subscriptions: all('SELECT s.*,m.name member_name,p.name plan_name FROM subscriptions s JOIN members m ON m.id=s.member_id JOIN plans p ON p.id=s.plan_id ORDER BY s.created_at DESC,s.id DESC'),
       invoices: all('SELECT i.*,m.name member_name,m.phone member_phone FROM invoices i JOIN members m ON m.id=i.member_id ORDER BY i.due_date,i.id').map(invoiceWithStatus),
       payments: all('SELECT p.*,m.name member_name FROM payments p JOIN invoices i ON i.id=p.invoice_id JOIN members m ON m.id=i.member_id ORDER BY p.paid_on DESC,p.id DESC'),
       appointments: all("SELECT a.*,COALESCE(m.name,NULLIF(a.contact_name,''),'Visitante') member_name FROM appointments a LEFT JOIN members m ON m.id=a.member_id ORDER BY a.starts_at"),
-      users: user.role === 'admin' ? all('SELECT id,name,email,role,enabled FROM users ORDER BY name') : [],
+      users: user.role === 'admin' ? all('SELECT id,name,email,role,enabled FROM users WHERE NOT EXISTS(SELECT 1 FROM professionals p WHERE p.user_id=users.id) ORDER BY name') : [],
     });
     if (pathname === '/api/export/members.csv' && method === 'GET') {
       const rows = [['Nome', 'WhatsApp', 'E-mail', 'Cadastro', 'Situação'], ...all('SELECT name,phone,email,joined_on,status FROM members ORDER BY name').map(m => [m.name,m.phone,m.email,m.joined_on,m.status === 'active' ? 'Ativo' : 'Inativo'])];
@@ -256,6 +261,7 @@ async function createGymServer(options = {}) {
     if (userMatch && method === 'PATCH') {
       if (user.role !== 'admin') fail(403,'Apenas administradores podem alterar acessos.');
       const target = exists('users',userMatch[1]);
+      if(one('SELECT user_id FROM professionals WHERE user_id=?',target.id))fail(409,'Use a área Profissionais para alterar este acesso.');
       if (target.id === user.id) fail(409,'Use Minha conta para alterar seu perfil. Seu próprio acesso não pode ser desativado aqui.');
       const name = text(b.name ?? target.name,120,true), address = email(b.email ?? target.email,true);
       const role = b.role ?? target.role, enabled = b.enabled === undefined ? target.enabled : (b.enabled ? 1 : 0);
@@ -366,7 +372,7 @@ async function createGymServer(options = {}) {
     fail(404, 'Ação não encontrada.');
   }
 
-  const types = { '.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.jpg':'image/jpeg' };
+  const types = { '.ttf':'font/ttf', '.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.jpg':'image/jpeg' };
   const marketingFiles = new Set(['/index.html','/styles.css','/script.js','/plate-scroll.js','/card-motion.js']);
   const server = http.createServer(async (req,res) => {
     res.setHeader('X-Content-Type-Options','nosniff');
@@ -377,10 +383,11 @@ async function createGymServer(options = {}) {
       const pathname = decodeURIComponent(new URL(req.url,'http://localhost').pathname);
       if (pathname.startsWith('/api/')) return await api(req,res,pathname);
       if (!['GET','HEAD'].includes(req.method)) fail(405,'Método não permitido.');
+      if(pathname==='/professor'){res.writeHead(302,{Location:'/professor/'});return res.end();}
       if(pathname==='/mensalista'){res.writeHead(302,{Location:'/mensalista/'});return res.end();}
       if (pathname === '/sistema') { res.writeHead(302,{Location:'/sistema/'}); return res.end(); }
-      const target = pathname === '/' ? '/index.html' : pathname === '/sistema/' ? '/sistema/index.html' : pathname==='/mensalista/'?'/mensalista/index.html':pathname;
-      if (!marketingFiles.has(target) && !target.startsWith('/assets/') && !['/sistema/index.html','/sistema/app.js','/sistema/calendar.js','/sistema/styles.css','/sistema/member-tools.js','/mensalista/index.html','/mensalista/styles.css','/mensalista/app.js'].includes(target)) fail(404,'Página não encontrada.');
+      const target = pathname === '/' ? '/index.html' : pathname === '/sistema/' ? '/sistema/index.html' : pathname==='/mensalista/'?'/mensalista/index.html':pathname==='/professor/'?'/professor/index.html':pathname;
+      if (!marketingFiles.has(target) && !target.startsWith('/assets/') && !['/sistema/index.html','/sistema/app.js','/sistema/calendar.js','/sistema/styles.css','/sistema/member-tools.js','/sistema/professional-tools.js','/mensalista/index.html','/mensalista/styles.css','/mensalista/app.js','/professor/index.html','/professor/app.js','/professor/styles.css'].includes(target)) fail(404,'Página não encontrada.');
       const file = path.resolve(ROOT,'.'+target);
       if (!file.startsWith(ROOT+path.sep)) fail(403,'Acesso não autorizado.');
       if (target.startsWith('/assets/') && !file.startsWith(path.join(ROOT,'assets')+path.sep)) fail(403,'Acesso não autorizado.');

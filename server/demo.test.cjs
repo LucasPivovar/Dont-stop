@@ -86,3 +86,24 @@ test('static staff edits member access and workouts used in the member portal',a
   const state=(await api.handle('/api/member/state')).body;assert.equal(state.workouts[0].title,'Treino individual');assert.equal(state.benefits.telemedicine.enabled,false);
   await api.handle(`/api/members/${id}/portal`,'POST',{email:'portal@example.com',enabled:false});assert.equal((await api.handle('/api/member/state')).status,401);
 });
+test('static professors see assigned students and publish workouts to the member portal',async()=>{
+  const {api}=demo();const options=(await api.handle('/api/professor/status')).body.candidates,teacher=options.find(p=>p.email==='professora1@dontstop.local');
+  assert.equal((await api.handle('/api/professor/login','POST',{email:teacher.email,password:'Professor!2026'})).status,200);
+  const state=(await api.handle('/api/professor/state')).body;assert.equal(state.members.length,4);assert.equal(state.invoices,undefined);const member=state.members[0],foreign=fixture.members.find(m=>!state.members.some(x=>x.id===m.id));
+  assert.equal((await api.handle(`/api/professor/members/${foreign.id}`)).status,404);
+  assert.equal((await api.handle(`/api/professor/members/${member.id}/workouts/5`,'POST',{title:'Treino individual do professor',instructor:'Não usar',exercises:[{name:'Exercício de teste',sets:'3',reps:'12'}]})).status,200);
+  await api.handle('/api/member/login','POST',{email:`aluno${member.id}@dontstop.local`,password:'Mensalista!2026'});const portal=(await api.handle('/api/member/state')).body;assert.equal(portal.professor.id,teacher.id);assert.equal(portal.workouts.find(w=>w.weekday===5).instructor,teacher.name);
+  const other=options.find(p=>p.id!==teacher.id);await api.handle(`/api/members/${member.id}/professor`,'POST',{professor_id:other.id});assert.equal((await api.handle(`/api/professor/members/${member.id}`)).status,404);
+});
+test('static management creates professional accounts and controls each benefit separately',async()=>{
+  const {api}=demo();const created=await api.handle('/api/professionals','POST',{name:'Profissional Teste',email:'novo.professor@example.com',password:'ProfessorNovo!2026',specialty:'Musculação'});assert.equal(created.status,201);
+  const memberId=fixture.members[0].id;assert.equal((await api.handle(`/api/members/${memberId}/portal`,'POST',{email:`aluno${memberId}@dontstop.local`,professor_id:created.body.id,telemedicine:false,discounts:true})).status,200);
+  const access=(await api.handle(`/api/members/${memberId}/portal`)).body;assert.equal(access.professor_id,created.body.id);assert.equal(access.benefits.telemedicine,0);assert.equal(access.benefits.discounts,1);
+  assert.equal((await api.handle('/api/professor/login','POST',{email:'novo.professor@example.com',password:'ProfessorNovo!2026'})).status,200);assert.equal((await api.handle('/api/professor/state')).body.members.length,1);
+  assert.equal((await api.handle('/api/auth/login','POST',{email:'novo.professor@example.com',password:'ProfessorNovo!2026'})).status,403);
+  await api.handle(`/api/professionals/${created.body.id}`,'PATCH',{enabled:false});assert.equal((await api.handle('/api/professor/state')).status,401);
+});
+test('static professional portal includes its demo adapter before the application',async()=>{
+  const html=await fs.readFile(path.join(__dirname,'../dist-demo/professor/index.html'),'utf8');assert.ok(html.indexOf('/demo/professor-api.js')<html.indexOf('/demo/api.js'));assert.ok(html.indexOf('/demo/api.js')<html.indexOf('/professor/app.js'));
+  for(const asset of [...html.matchAll(/(?:href|src)="(\/(?:professor|sistema|demo)\/[^\"]+\.(?:css|js))"/g)].map(x=>x[1])){await fs.access(path.join(__dirname,'../dist-demo',asset));assert.equal(new URL(asset,'https://example.com/professor').pathname,new URL(asset,'https://example.com/professor/').pathname);}
+});

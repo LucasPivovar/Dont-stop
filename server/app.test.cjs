@@ -36,7 +36,7 @@ function client(){
     setInterval:()=>1,clearInterval(){},setTimeout:()=>1,clearTimeout(){},
     FormData:class {constructor(form){return new Map(Object.entries(form.values));}},
     fetch:(url,options={})=>fetch(base+url,{...options,headers:{...options.headers,Origin:base,Cookie:cookie}})});
-  for(const file of ['member-tools.js','calendar.js','app.js']){
+  for(const file of ['professional-tools.js','member-tools.js','calendar.js','app.js']){
     let source=fs.readFileSync(path.join(__dirname,'../sistema/'+file),'utf8');
     if(file==='app.js')source=source.replace(/boot\(\);\s*$/,'');
     vm.runInContext(source,context,{filename:file});
@@ -47,7 +47,7 @@ function client(){
 test('client starts a session and renders every page and calendar mode',async()=>{
   const c=client();await c.run('startSession()');
   assert.equal(c.nodes.get('#shell').hidden,false);
-  for(const route of ['visao-geral','mensalistas','agenda','assinaturas','cobrancas','planos','equipe']){
+  for(const route of ['visao-geral','mensalistas','agenda','assinaturas','cobrancas','planos','profissionais','equipe']){
     c.run(`navigate('${route}')`);assert.ok(c.nodes.get('#view').innerHTML.includes('<h1'),route);
     assert.equal(c.nodes.get('#view').innerHTML.includes('undefined'),false,route);
   }
@@ -92,4 +92,17 @@ test('staff opens the member access, benefits and weekly workout editor',async()
   const c=client();await c.run('loadData()');await c.run('openMemberPortal(state.data.members[0].id)');
   const content=c.nodes.get('#modal-content').innerHTML;
   assert.ok(content.includes('Treinos da semana'));assert.ok(content.includes('Telemedicina'));assert.ok(content.includes('Clube de descontos'));assert.ok(content.includes('exercise_name'));
+});
+test('slash focuses search without inserting text and respects fields, dialogs and modifiers',async()=>{
+  const c=client();await c.run('loadData()');let focused=0,prevented=0;c.nodes.get('#search').focus=()=>focused++;
+  const event={key:'/',preventDefault:()=>prevented++};c.context.shortcut=event;
+  assert.equal(c.run('focusSearchShortcut(shortcut)'),true);assert.equal(focused,1);assert.equal(prevented,1);assert.equal(c.nodes.get('#search').value,'');
+  for(const tagName of ['INPUT','TEXTAREA','SELECT']){c.context.document.activeElement={tagName};assert.equal(c.run('focusSearchShortcut(shortcut)'),false);}
+  c.context.document.activeElement={tagName:'DIV',isContentEditable:true};assert.equal(c.run('focusSearchShortcut(shortcut)'),false);
+  c.context.document.activeElement={tagName:'BODY'};
+  for(const flag of ['ctrlKey','metaKey','altKey','isComposing','defaultPrevented']){c.context.shortcut={...event,[flag]:true};assert.equal(c.run('focusSearchShortcut(shortcut)'),false,flag);}
+  c.context.shortcut=event;c.nodes.get('#modal').open=true;assert.equal(c.run('focusSearchShortcut(shortcut)'),false);assert.equal(focused,1);
+});
+test('management shows professionals, member assignments and access controls',async()=>{
+  const c=client();await c.run('loadData()');c.run("navigate('profissionais')");assert.ok(c.nodes.get('#view').innerHTML.includes('Camila Rocha'));c.run('assignmentForm(state.data.members[0].id)');assert.ok(c.nodes.get('#modal-content').innerHTML.includes('Professor responsável'));c.run('professionalForm()');assert.ok(c.nodes.get('#modal-content').innerHTML.includes('Especialidade'));await c.run('openMemberPortal(state.data.members[0].id)');const form=c.nodes.get('#modal-content').innerHTML;assert.ok(form.includes('Professor responsável'));assert.ok(form.includes('name="telemedicine"'));assert.ok(form.includes('name="discounts"'));
 });

@@ -26,6 +26,7 @@ Importe este repositório na Vercel usando a branch `main` e a pasta raiz. O arq
 - `/`: site da academia, com um link "Sistema" na navegação.
 - `/sistema/`: painel que abre com oito mensalistas fictícios, planos, assinaturas, cobranças e agenda preenchida.
 - `/mensalista/`: área individual com slides, treino do dia, mensalidade e benefícios. Escolha um aluno fictício em "Explorar área do mensalista". O acesso de Ana é `aluno1@dontstop.local` / `Mensalista!2026`.
+- `/professor/`: área do professor, com alunos vinculados e editor de treino semanal. Na demonstração, use "Explorar área do professor" ou `professora1@dontstop.local` / `Professor!2026`.
 - Cadastros, edição, remarcação, pagamentos simulados e exportação CSV funcionam no navegador. As alterações ficam no localStorage desse navegador; não são compartilhadas com outras pessoas.
 - O botão "Restaurar demonstração" volta aos dados iniciais.
 - Ao sair, use "Explorar demonstração" ou o acesso fictício `demo@dontstop.local` / `Demonstracao!2026`.
@@ -62,6 +63,8 @@ Abra http://127.0.0.1:3101/sistema/?demo=1. Esse ambiente usa **dados fictícios
 - **WhatsApp:** preparação de lembretes para revisão e envio manual. Não envia mensagens sozinho.
 - **Área do mensalista:** login separado da equipe, consulta somente aos próprios dados, slides da academia, plano e histórico financeiro, treino semanal com exercícios/séries/repetições/carga/pausa, conclusão diária, alteração de dados/senha e apresentação de benefícios.
 - **Gestão do portal:** em Mensalistas, use "Área do mensalista e treinos" ou abra o perfil e "Área do mensalista". A equipe cadastra o e-mail e a senha inicial, desativa acessos, sinaliza os benefícios incluídos e monta o treino de cada dia. Novos alunos reais não recebem treinos nem benefícios automaticamente.
+- **Profissionais:** administradores cadastram os professores em Profissionais. Cada mensalista tem um professor responsável, selecionado na própria lista de alunos ou no editor de acesso do mensalista. Telemedicina e clube de descontos são selecionados separadamente.
+- **Área do professor:** login e cookie separados da gestão. O professor consulta somente os alunos atualmente vinculados a ele, monta exercícios/séries/repetições/carga/pausa de cada dia e acompanha conclusões. Não recebe dados financeiros nem pode alterar acessos ou benefícios. Reatribuir o aluno remove imediatamente o acesso do professor anterior. O treino salvo aparece na área do aluno.
 
 Telemedicina e clube de descontos estão preparados como benefícios. Para oferecer o serviço de verdade, a academia precisa contratar os parceiros e configurar `GYM_TELEMEDICINE_URL` / `GYM_DISCOUNTS_URL` com os links HTTPS. Até isso acontecer, o portal orienta o aluno a falar com a recepção. Não há consulta médica, emissão de voucher ou autenticação no parceiro implementada no projeto. A demonstração informa isso ao abrir os benefícios.
 

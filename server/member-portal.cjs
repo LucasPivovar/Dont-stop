@@ -22,10 +22,15 @@ async function createMemberPortal({db,demo,today,body,send,authenticate,password
   const safeUrl=value=>{try{const u=new URL(value);return u.protocol==='https:'?u.href:null;}catch{return null;}};
   const workouts=id=>all('SELECT * FROM member_workouts WHERE member_id=? ORDER BY weekday',id).map(w=>({...w,exercises:JSON.parse(w.exercises)}));
   const providerUrls={telemedicine:safeUrl(process.env.GYM_TELEMEDICINE_URL),discounts:safeUrl(process.env.GYM_DISCOUNTS_URL)};
+  function saveWorkout(memberId,weekday,b){
+    if(!Array.isArray(b.exercises)||b.exercises.length>30)fail(422,'Informe até 30 exercícios.');
+    const exercises=b.exercises.map(x=>({name:text(x.name,120,true),sets:text(x.sets,30,true),reps:text(x.reps,60,true),load:text(x.load,100),rest:text(x.rest,60)}));
+    run('INSERT INTO member_workouts(member_id,weekday,title,instructor,notes,exercises) VALUES(?,?,?,?,?,?) ON CONFLICT(member_id,weekday) DO UPDATE SET title=excluded.title,instructor=excluded.instructor,notes=excluded.notes,exercises=excluded.exercises',memberId,weekday,text(b.title,120,true),text(b.instructor,120),text(b.notes,2000),JSON.stringify(exercises));
+  }
   function memberState(m){
     const subscription=one('SELECT s.*,p.name plan_name,p.notes plan_notes FROM subscriptions s JOIN plans p ON p.id=s.plan_id WHERE s.member_id=? ORDER BY CASE WHEN s.status=\'active\' THEN 0 ELSE 1 END,s.id DESC LIMIT 1',m.id)||null;
     const benefits=one('SELECT telemedicine,discounts FROM member_benefits WHERE member_id=?',m.id)||{telemedicine:0,discounts:0};
-    return {member:m,today:today(),demo,subscription,workouts:workouts(m.id),logs:all('SELECT workout_id,completed_on FROM member_workout_logs WHERE member_id=? ORDER BY completed_on DESC LIMIT 120',m.id),invoices:all('SELECT id,description,amount_cents,due_date,status FROM invoices WHERE member_id=? ORDER BY due_date DESC,id DESC',m.id).map(i=>({...i,display_status:i.status==='pending'&&i.due_date<today()?'overdue':i.status})),payments:all('SELECT p.invoice_id,p.amount_cents,p.method,p.paid_on FROM payments p JOIN invoices i ON i.id=p.invoice_id WHERE i.member_id=? ORDER BY p.paid_on DESC',m.id),benefits:Object.fromEntries(Object.entries(benefits).map(([key,value])=>[key,{enabled:!!value&&subscription?.status==='active',url:providerUrls[key]}]))};
+    return {member:m,today:today(),demo,subscription,professor:one('SELECT u.id,u.name,p.specialty FROM member_professors a JOIN users u ON u.id=a.user_id JOIN professionals p ON p.user_id=u.id WHERE a.member_id=? AND u.enabled=1',m.id)||null,workouts:workouts(m.id),logs:all('SELECT workout_id,completed_on FROM member_workout_logs WHERE member_id=? ORDER BY completed_on DESC LIMIT 120',m.id),invoices:all('SELECT id,description,amount_cents,due_date,status FROM invoices WHERE member_id=? ORDER BY due_date DESC,id DESC',m.id).map(i=>({...i,display_status:i.status==='pending'&&i.due_date<today()?'overdue':i.status})),payments:all('SELECT p.invoice_id,p.amount_cents,p.method,p.paid_on FROM payments p JOIN invoices i ON i.id=p.invoice_id WHERE i.member_id=? ORDER BY p.paid_on DESC',m.id),benefits:Object.fromEntries(Object.entries(benefits).map(([key,value])=>[key,{enabled:!!value&&subscription?.status==='active',url:providerUrls[key]}]))};
   }
   const attempts=new Map();
   async function handle(req,res,pathname){
@@ -56,22 +61,22 @@ async function createMemberPortal({db,demo,today,body,send,authenticate,password
     authenticate(req);
     const match=pathname.match(/^\/api\/members\/(\d+)\/(portal|workouts)(?:\/([0-6]))?$/);if(!match)fail(404,'Ação não encontrada.');
     const m=one('SELECT id FROM members WHERE id=?',+match[1]);if(!m)fail(404,'Mensalista não encontrado.');
-    if(method==='GET'&&match[2]==='portal')return send(res,200,{access:one('SELECT email,enabled FROM member_access WHERE member_id=?',m.id)||null,benefits:one('SELECT telemedicine,discounts FROM member_benefits WHERE member_id=?',m.id)||{},workouts:workouts(m.id)});
+    if(method==='GET'&&match[2]==='portal')return send(res,200,{access:one('SELECT email,enabled FROM member_access WHERE member_id=?',m.id)||null,benefits:one('SELECT telemedicine,discounts FROM member_benefits WHERE member_id=?',m.id)||{},professor_id:one('SELECT user_id FROM member_professors WHERE member_id=?',m.id)?.user_id||null,professionals:all('SELECT u.id,u.name FROM professionals p JOIN users u ON u.id=p.user_id WHERE u.enabled=1 ORDER BY u.name'),workouts:workouts(m.id)});
     const b=await body(req);
     if(match[2]==='portal'&&method==='POST'){
+      if(b.professor_id&&!one('SELECT p.user_id FROM professionals p JOIN users u ON u.id=p.user_id WHERE p.user_id=? AND u.enabled=1',+b.professor_id))fail(422,'Escolha um professor ativo.');
       const previous=one('SELECT * FROM member_access WHERE member_id=?',m.id),address=email(b.email??previous?.email,true);if(one('SELECT member_id FROM member_access WHERE email=? AND member_id<>?',address,m.id))fail(409,'Este e-mail já possui acesso.');
       const hash=b.password?await passwordHash(b.password):previous?.password_hash;if(!hash)fail(422,'Informe a senha inicial do mensalista.');const enabled=b.enabled===undefined?(previous?.enabled??1):Number(!!b.enabled);
       run('INSERT INTO member_access VALUES(?,?,?,?) ON CONFLICT(member_id) DO UPDATE SET email=excluded.email,password_hash=excluded.password_hash,enabled=excluded.enabled',m.id,address,hash,enabled);
       run('INSERT INTO member_benefits VALUES(?,?,?) ON CONFLICT(member_id) DO UPDATE SET telemedicine=excluded.telemedicine,discounts=excluded.discounts',m.id,Number(!!b.telemedicine),Number(!!b.discounts));
+      if(b.professor_id!==undefined){if(b.professor_id)run('INSERT INTO member_professors VALUES(?,?) ON CONFLICT(member_id) DO UPDATE SET user_id=excluded.user_id',m.id,+b.professor_id);else run('DELETE FROM member_professors WHERE member_id=?',m.id);}
       if(!enabled||b.password||address!==previous?.email)run('DELETE FROM member_sessions WHERE member_id=?',m.id);return send(res,200,{ok:true});
     }
     if(match[2]==='workouts'&&match[3]!==undefined&&method==='POST'){
-      if(!Array.isArray(b.exercises)||b.exercises.length>30)fail(422,'Informe até 30 exercícios.');
-      const exercises=b.exercises.map(x=>({name:text(x.name,120,true),sets:text(x.sets,30,true),reps:text(x.reps,60,true),load:text(x.load,100),rest:text(x.rest,60)}));
-      run('INSERT INTO member_workouts(member_id,weekday,title,instructor,notes,exercises) VALUES(?,?,?,?,?,?) ON CONFLICT(member_id,weekday) DO UPDATE SET title=excluded.title,instructor=excluded.instructor,notes=excluded.notes,exercises=excluded.exercises',m.id,+match[3],text(b.title,120,true),text(b.instructor,120),text(b.notes,2000),JSON.stringify(exercises));return send(res,200,{ok:true});
+      saveWorkout(m.id,+match[3],b);return send(res,200,{ok:true});
     }
     fail(404,'Ação não encontrada.');
   }
-  return {handle};
+  return {handle,saveWorkout};
 }
 module.exports={createMemberPortal};

@@ -9,7 +9,7 @@
     "sistema": "node --env-file-if-exists=.env server/gym.cjs",
     "sistema:demo": "node server/gym.cjs --demo",
     "backup": "node --env-file-if-exists=.env server/backup.cjs",
-    "test": "node --test server/gym.test.cjs server/calendar.test.cjs server/app.test.cjs server/demo.test.cjs server/member-portal.test.cjs",
+    "test": "node --test server/gym.test.cjs server/calendar.test.cjs server/app.test.cjs server/demo.test.cjs server/member-portal.test.cjs server/professor-portal.test.cjs",
     "build:demo": "node scripts/build-vercel-demo.cjs",
     "preview:demo": "node scripts/preview-demo.cjs"
   },
