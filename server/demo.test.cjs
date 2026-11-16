@@ -10,8 +10,18 @@ function demo(){const values=new Map();const storage={getItem:k=>values.get(k),s
 test('static build exposes only public files and starts with fictional records',async()=>{
   const {api}=demo(),result=await api.handle('/api/state');assert.equal(result.status,200);assert.equal(result.body.today,'2026-11-20');assert.equal(result.body.members.length,8);assert.equal(result.body.appointments.length,16);assert.equal(result.body.demo,true);
   assert.equal(JSON.stringify(fixture).includes('password_hash'),false);
-  const system=await fs.readFile(path.join(__dirname,'../dist-demo/sistema/index.html'),'utf8');assert.ok(system.indexOf('/demo/api.js')<system.indexOf('./calendar.js'));
+  const system=await fs.readFile(path.join(__dirname,'../dist-demo/sistema/index.html'),'utf8');assert.ok(system.indexOf('/demo/api.js')<system.indexOf('/sistema/calendar.js'));
   for(const file of ['server/gym.cjs','.data/gym.sqlite','.env','.git/config'])await assert.rejects(fs.access(path.join(__dirname,'../dist-demo',file)));
+});
+test('system assets resolve identically with and without the final slash',async()=>{
+  const system=await fs.readFile(path.join(__dirname,'../dist-demo/sistema/index.html'),'utf8');
+  const assets=[...system.matchAll(/(?:src|href)="([^\"]+\.(?:js|css))"/g)].map(match=>match[1]).filter(value=>!value.startsWith('https:'));
+  assert.ok(assets.includes('/demo/api.js'));
+  assert.ok(assets.includes('/sistema/app.js'));
+  for(const asset of assets){
+    assert.equal(new URL(asset,'https://example.com/sistema').pathname,new URL(asset,'https://example.com/sistema/').pathname);
+    await fs.access(path.join(__dirname,'../dist-demo',asset));
+  }
 });
 test('static demo persists members, plans and subscriptions across reloads',async()=>{
   const {api,storage,clock}=demo();const member=await api.handle('/api/members','POST',{name:'Pessoa fictícia',phone:'41999990000',joined_on:'2026-11-20'});assert.equal(member.status,201);

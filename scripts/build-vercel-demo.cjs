@@ -16,7 +16,7 @@ async function build(){
     await fs.writeFile(path.join(output,'demo/fixture.json'),JSON.stringify(fixture));
   }finally{app.db.close();}
   let system=await fs.readFile(path.join(output,'sistema/index.html'),'utf8');
-  system=system.replace('<script src="./calendar.js" defer>','<script src="/demo/api.js" defer></script>\n  <script src="./calendar.js" defer>');
+  system=system.replace('<script src="/sistema/calendar.js" defer>','<script src="/demo/api.js" defer></script>\n  <script src="/sistema/calendar.js" defer>');
   await fs.writeFile(path.join(output,'sistema/index.html'),system);
   let site=await fs.readFile(path.join(output,'index.html'),'utf8');
   site=site.replaceAll('<a href="#unidades">Localização</a>','<a href="#unidades">Localização</a>\n        <a href="/sistema/">Sistema</a>');

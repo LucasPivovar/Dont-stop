@@ -162,7 +162,7 @@ test('backup preserves records while the live database uses WAL',async()=>{
 });
 test('management page loads all client scripts and assets',async()=>{
   const page=await request('/sistema/');assert.equal(page.status,200);
-  assert.ok(page.body.indexOf('src="./calendar.js"')<page.body.indexOf('src="./app.js"'));
+  assert.ok(page.body.indexOf('src="/sistema/calendar.js"')<page.body.indexOf('src="/sistema/app.js"'));
   for(const asset of ['/sistema/app.js','/sistema/calendar.js','/sistema/styles.css','/assets/management-icons.svg','/assets/logo-dontstop-400.png'])assert.equal((await request(asset)).status,200,asset);
 });
 test('demo and real environment have separate session cookies and records',async()=>{
