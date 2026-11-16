@@ -25,6 +25,7 @@ Importe este repositório na Vercel usando a branch `main` e a pasta raiz. O arq
 
 - `/`: site da academia, com um link "Sistema" na navegação.
 - `/sistema/`: painel que abre com oito mensalistas fictícios, planos, assinaturas, cobranças e agenda preenchida.
+- `/mensalista/`: área individual com slides, treino do dia, mensalidade e benefícios. Escolha um aluno fictício em "Explorar área do mensalista". O acesso de Ana é `aluno1@dontstop.local` / `Mensalista!2026`.
 - Cadastros, edição, remarcação, pagamentos simulados e exportação CSV funcionam no navegador. As alterações ficam no localStorage desse navegador; não são compartilhadas com outras pessoas.
 - O botão "Restaurar demonstração" volta aos dados iniciais.
 - Ao sair, use "Explorar demonstração" ou o acesso fictício `demo@dontstop.local` / `Demonstracao!2026`.
@@ -59,6 +60,12 @@ Abra http://127.0.0.1:3101/sistema/?demo=1. Esse ambiente usa **dados fictícios
 - **Minha conta:** alteração de nome e senha com verificação da senha atual.
 - **Visão geral:** indicadores calculados a partir dos registros, recebimentos por mês, agenda de hoje e cobranças pendentes.
 - **WhatsApp:** preparação de lembretes para revisão e envio manual. Não envia mensagens sozinho.
+- **Área do mensalista:** login separado da equipe, consulta somente aos próprios dados, slides da academia, plano e histórico financeiro, treino semanal com exercícios/séries/repetições/carga/pausa, conclusão diária, alteração de dados/senha e apresentação de benefícios.
+- **Gestão do portal:** em Mensalistas, use "Área do mensalista e treinos" ou abra o perfil e "Área do mensalista". A equipe cadastra o e-mail e a senha inicial, desativa acessos, sinaliza os benefícios incluídos e monta o treino de cada dia. Novos alunos reais não recebem treinos nem benefícios automaticamente.
+
+Telemedicina e clube de descontos estão preparados como benefícios. Para oferecer o serviço de verdade, a academia precisa contratar os parceiros e configurar `GYM_TELEMEDICINE_URL` / `GYM_DISCOUNTS_URL` com os links HTTPS. Até isso acontecer, o portal orienta o aluno a falar com a recepção. Não há consulta médica, emissão de voucher ou autenticação no parceiro implementada no projeto. A demonstração informa isso ao abrir os benefícios.
+
+O portal real usa sessões próprias em cookies HttpOnly, separadas da equipe. Desativar o acesso ou inativar o mensalista bloqueia seu uso. Resetar a senha pela equipe revoga as sessões anteriores. Conclusões de treino são vinculadas ao aluno e ao dia programado, sem duplicação. O backend filtra os dados pelo aluno autenticado; o cliente não escolhe o identificador para consultar outro cadastro.
 
 O gateway foi adiado por decisão do projeto. **Não há geração automática de Pix/boletos, débito automático, disparo automático de mensagens ou conciliação com banco.** Registrar um pagamento no painel não movimenta dinheiro.
 

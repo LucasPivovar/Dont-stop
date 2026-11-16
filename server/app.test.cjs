@@ -36,7 +36,7 @@ function client(){
     setInterval:()=>1,clearInterval(){},setTimeout:()=>1,clearTimeout(){},
     FormData:class {constructor(form){return new Map(Object.entries(form.values));}},
     fetch:(url,options={})=>fetch(base+url,{...options,headers:{...options.headers,Origin:base,Cookie:cookie}})});
-  for(const file of ['calendar.js','app.js']){
+  for(const file of ['member-tools.js','calendar.js','app.js']){
     let source=fs.readFileSync(path.join(__dirname,'../sistema/'+file),'utf8');
     if(file==='app.js')source=source.replace(/boot\(\);\s*$/,'');
     vm.runInContext(source,context,{filename:file});
@@ -87,4 +87,9 @@ test('client handles empty data, staff navigation and currency validation',async
   c.run('invoiceForm()');assert.ok(c.nodes.get('#modal-content').innerHTML.includes('Cadastre um mensalista primeiro'));
   assert.equal(c.run("toCents('119,90')"),11990);
   for(const value of ['0','1.234,56','abc','-1'])assert.throws(()=>c.run(`toCents('${value}')`));
+});
+test('staff opens the member access, benefits and weekly workout editor',async()=>{
+  const c=client();await c.run('loadData()');await c.run('openMemberPortal(state.data.members[0].id)');
+  const content=c.nodes.get('#modal-content').innerHTML;
+  assert.ok(content.includes('Treinos da semana'));assert.ok(content.includes('Telemedicina'));assert.ok(content.includes('Clube de descontos'));assert.ok(content.includes('exercise_name'));
 });

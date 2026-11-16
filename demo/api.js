@@ -1,7 +1,7 @@
 (function (root) {
   'use strict';
   function createDemoApi(seed, storage, clock = () => new Date()) {
-    const key = 'dontstop-presentation-v1';
+    const key = 'dontstop-presentation-v2';
     const clone = value => JSON.parse(JSON.stringify(value));
     const today = () => new Intl.DateTimeFormat('en-CA', {timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).format(clock());
     const fail = (status, message) => { throw Object.assign(new Error(message), {status}); };
@@ -17,6 +17,7 @@
     let db;
     try { db=JSON.parse(storage.getItem(key)); } catch {}
     if(!db||!Array.isArray(db.members)||!Array.isArray(db.users))db=initial();
+    const memberDemo=(typeof module==='object'&&module.exports?require('./member-api.js').createMemberDemoApi:root.createMemberDemoApi)({get:()=>db,save:data=>{storage.setItem(key,JSON.stringify(data));db=data;},today});
     const find=(data,table,id)=>data[table].find(x=>x.id===+id)||fail(404,'Registro não encontrado.');
     const add=(data,table,row)=>{const item={...row,id:Math.max(0,...data[table].map(x=>x.id))+1};data[table].push(item);return item;};
     const user=data=>data.signedOut?null:data.users.find(x=>x.id===data.currentUser&&x.enabled);
@@ -33,6 +34,7 @@
     async function hash(value) {const bytes=await root.crypto.subtle.digest('SHA-256',new TextEncoder().encode(value));return Array.from(new Uint8Array(bytes),x=>x.toString(16).padStart(2,'0')).join('');}
     async function handle(path, method='GET', b={}) {
       try {
+        if(path.startsWith('/api/member/')||/^\/api\/members\/\d+\/(portal|workouts)(?:\/[0-6])?$/.test(path))return await memberDemo.handle(path,method,b);
         if(path==='/api/auth/status')return {status:200,body:{user:safeUser(user(db)),setupRequired:false,demo:true,today:today()}};
         if(path==='/api/state'&&method==='GET'){if(!user(db))fail(401,'Entre na demonstração para continuar.');return {status:200,body:state(db)};}
         if(path==='/api/export/members.csv'&&method==='GET'){

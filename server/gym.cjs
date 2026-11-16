@@ -4,6 +4,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { promisify } = require('node:util');
 const { DatabaseSync } = require('node:sqlite');
+const {createMemberPortal}=require('./member-portal.cjs');
 const scrypt = promisify(crypto.scrypt);
 const ROOT = path.resolve(__dirname, '..');
 const METHODS = ['pix', 'dinheiro', 'cartao', 'transferencia'];
@@ -176,7 +177,9 @@ async function createGymServer(options = {}) {
   }
   const invoiceWithStatus = row => ({ ...row, display_status: row.status === 'pending' && row.due_date < today() ? 'overdue' : row.status });
 
+  const memberPortal=await createMemberPortal({db,demo,today,body,send,authenticate,passwordHash,passwordMatches,day,text,phone,email,fail});
   async function api(req, res, pathname) {
+    if(pathname.startsWith('/api/member/')||/^\/api\/members\/\d+\/(portal|workouts)(?:\/[0-6])?$/.test(pathname))return memberPortal.handle(req,res,pathname);
     const method = req.method;
     if (pathname === '/api/auth/status' && method === 'GET') {
       let user = null; try { user = authenticate(req); } catch {}
@@ -374,9 +377,10 @@ async function createGymServer(options = {}) {
       const pathname = decodeURIComponent(new URL(req.url,'http://localhost').pathname);
       if (pathname.startsWith('/api/')) return await api(req,res,pathname);
       if (!['GET','HEAD'].includes(req.method)) fail(405,'Método não permitido.');
+      if(pathname==='/mensalista'){res.writeHead(302,{Location:'/mensalista/'});return res.end();}
       if (pathname === '/sistema') { res.writeHead(302,{Location:'/sistema/'}); return res.end(); }
-      const target = pathname === '/' ? '/index.html' : pathname === '/sistema/' ? '/sistema/index.html' : pathname;
-      if (!marketingFiles.has(target) && !target.startsWith('/assets/') && !['/sistema/index.html','/sistema/app.js','/sistema/calendar.js','/sistema/styles.css'].includes(target)) fail(404,'Página não encontrada.');
+      const target = pathname === '/' ? '/index.html' : pathname === '/sistema/' ? '/sistema/index.html' : pathname==='/mensalista/'?'/mensalista/index.html':pathname;
+      if (!marketingFiles.has(target) && !target.startsWith('/assets/') && !['/sistema/index.html','/sistema/app.js','/sistema/calendar.js','/sistema/styles.css','/sistema/member-tools.js','/mensalista/index.html','/mensalista/styles.css','/mensalista/app.js'].includes(target)) fail(404,'Página não encontrada.');
       const file = path.resolve(ROOT,'.'+target);
       if (!file.startsWith(ROOT+path.sep)) fail(403,'Acesso não autorizado.');
       if (target.startsWith('/assets/') && !file.startsWith(path.join(ROOT,'assets')+path.sep)) fail(403,'Acesso não autorizado.');

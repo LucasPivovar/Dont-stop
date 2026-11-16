@@ -23,6 +23,12 @@ test('system assets resolve identically with and without the final slash',async(
     await fs.access(path.join(__dirname,'../dist-demo',asset));
   }
 });
+test('member portal uses canonical public assets and receives demo adapter before app',async()=>{
+  const html=await fs.readFile(path.join(__dirname,'../dist-demo/mensalista/index.html'),'utf8');
+  assert.ok(html.indexOf('/demo/member-api.js')<html.indexOf('/demo/api.js'));assert.ok(html.indexOf('/demo/api.js')<html.indexOf('/mensalista/app.js'));
+  const assets=[...html.matchAll(/(?:src|href)="([^\"]+\.(?:js|css))"/g)].map(match=>match[1]).filter(x=>!x.startsWith('https:'));
+  for(const asset of assets){assert.equal(new URL(asset,'https://example.com/mensalista').pathname,new URL(asset,'https://example.com/mensalista/').pathname);await fs.access(path.join(__dirname,'../dist-demo',asset));}
+});
 test('static demo persists members, plans and subscriptions across reloads',async()=>{
   const {api,storage,clock}=demo();const member=await api.handle('/api/members','POST',{name:'Pessoa fictícia',phone:'41999990000',joined_on:'2026-11-20'});assert.equal(member.status,201);
   const plan=await api.handle('/api/plans','POST',{name:'Plano de teste',amount_cents:9900,enabled:true});assert.equal(plan.status,201);
@@ -61,4 +67,22 @@ test('static team accounts, role limits, logout and account updates work',async(
 test('static reset restores fixtures and failed storage does not change data',async()=>{
   const {api,storage}=demo();await api.handle('/api/members','POST',{name:'Cadastro temporário'});api.reset();assert.equal((await api.handle('/api/state')).body.members.length,8);
   storage.setItem=()=>{throw Error('QuotaExceededError');};assert.equal((await api.handle('/api/members','POST',{name:'Não deve salvar'})).status,507);assert.equal((await api.handle('/api/state')).body.members.length,8);
+});
+test('static member portal isolates each member and remembers completed workouts',async()=>{
+  const {api,storage,clock}=demo();assert.equal((await api.handle('/api/member/state')).status,401);
+  const login=await api.handle('/api/member/login','POST',{email:'aluno2@dontstop.local',password:'Mensalista!2026'});assert.equal(login.status,200);
+  let state=(await api.handle('/api/member/state')).body;assert.equal(state.member.id,2);assert.equal(state.users,undefined);assert.ok(state.workouts.every(w=>w.member_id===2));assert.ok(state.invoices.every(i=>i.member_id===2));assert.equal(state.benefits.telemedicine.enabled,true);
+  const own=state.workouts.find(w=>w.weekday===5),foreign=fixture.member_workouts.find(w=>w.member_id===1&&w.weekday===5);
+  assert.equal((await api.handle(`/api/member/workouts/${foreign.id}/complete`,'POST',{})).status,404);
+  for(let i=0;i<2;i++)assert.equal((await api.handle(`/api/member/workouts/${own.id}/complete`,'POST',{})).status,200);
+  state=(await createDemoApi(fixture,storage,clock).handle('/api/member/state')).body;assert.equal(state.logs.length,1);
+  assert.equal((await api.handle('/api/state')).body.user.role,'admin');
+});
+test('static staff edits member access and workouts used in the member portal',async()=>{
+  const {api}=demo();const member=await api.handle('/api/members','POST',{name:'Mensalista do portal'}),id=member.body.id;
+  assert.equal((await api.handle(`/api/members/${id}/portal`,'POST',{email:'portal@example.com',password:'PortalDoAluno!2026',enabled:true,telemedicine:true})).status,200);
+  assert.equal((await api.handle(`/api/members/${id}/workouts/5`,'POST',{title:'Treino individual',instructor:'Professor',exercises:[{name:'Exercício individual',sets:'3',reps:'12'}]})).status,200);
+  assert.equal((await api.handle('/api/member/login','POST',{email:'portal@example.com',password:'PortalDoAluno!2026'})).status,200);
+  const state=(await api.handle('/api/member/state')).body;assert.equal(state.workouts[0].title,'Treino individual');assert.equal(state.benefits.telemedicine.enabled,false);
+  await api.handle(`/api/members/${id}/portal`,'POST',{email:'portal@example.com',enabled:false});assert.equal((await api.handle('/api/member/state')).status,401);
 });
